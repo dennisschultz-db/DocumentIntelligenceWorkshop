@@ -16,27 +16,29 @@ variables:
     description: The schema to use
 
 targets:
-  dev:
+  fevm-azure:
     # The default target uses 'mode: development' to create a development copy.
     # - Deployed resources get prefixed with '[dev my_user_name]'
     # - Any job schedules and triggers are paused by default.
     # See also https://docs.databricks.com/dev-tools/bundles/deployment-modes.html.
-    mode: development
-    default: true
-    workspace:
-      host: https://adb-7405609785664034.14.azuredatabricks.net
-    variables:
-      catalog: dennis_schultz_azure_classic01
-      schema: ${workspace.current_user.short_name}
-  prod:
     mode: production
+    default: true
     workspace:
       host: https://adb-7405609785664034.14.azuredatabricks.net
       # We explicitly deploy to /Workspace/Users/dennis.schultz@databricks.com to make sure we only have a single copy.
       root_path: /Workspace/Users/dennis.schultz@databricks.com/.bundle/${bundle.name}/${bundle.target}
     variables:
       catalog: dennis_schultz_azure_classic01
-      schema: prod
+      schema: ${workspace.current_user.short_name}
+  fevm-aws:
+    mode: production
+    workspace:
+      host: https://fevm-dennis-schultz-classic01.cloud.databricks.com/?o=7474660716592364
+      # We explicitly deploy to /Workspace/Users/dennis.schultz@databricks.com to make sure we only have a single copy.
+      root_path: /Workspace/Users/dennis.schultz@databricks.com/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: dennis_schultz
+      schema: ${workspace.current_user.short_name}
     permissions:
       - user_name: dennis.schultz@databricks.com
         level: CAN_MANAGE

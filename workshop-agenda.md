@@ -1,5 +1,7 @@
 # Databricks Document Processing Workshop
+
 ## Replacing/Augmenting an AWS Microservices Architecture
+
 ### Two Half-Day Sessions (8 hrs total)
 
 ---
@@ -8,11 +10,43 @@
 
 - Databricks workspace provisioned with Unity Catalog enabled
 - Serverless compute enabled (required for AI Functions)
+- Participant accounts created with workspace access
+  - Entitlements granted via group
 - DBR 17.3 LTS+ cluster configured (18.x preferred for SharePoint metadata)
+  - TBD: not sure this is necessary
+- Previews enabled
+  - Beta
+    - AI Prep Search
+    - AI Search: Quality Evaluation
+    - Custom LLM Serving for Databricks Model Serving
+    - Discover Page
+    - Lakeflow Connect for Sharepoint
+    - Supervisor API
+    - Third Party Connectors for Agents
+    - Upload Local PDFs to Genie Spaces
+    - Vector Search: Full-Text Search
+  - Public Preview
+    - AI Classify
+    - AI Extract
+    - AI Query for Custom Models and External Models
+    - AI Search Storage Optimized
+    - Agent Frameworks: On-Behalf-Of-User Authorization
+    - Enable Extended Models
+    - Enhanced Python UDFs in Unity Catalog
+    - External Tool Calling for Agents
+    - Genie - Upload File
+    - Genie Agent
+    - Genie Answer Inspection
+    - Lakeflow Designer
+    - Lakeflow Pipelines Editor
+    - Managed MCP Servers
+    - Synthetic Agent Evaluation
+    - Vector Search High QPS
+- Settings enabled
+  - Advanced -> Choose entitlements when adding principals to workspaces
 - SharePoint OAuth connection pre-configured in Unity Catalog
 - Elasticsearch connector library (es-hadoop) installed on cluster
 - Sample documents uploaded to a Unity Catalog Volume (PDFs, PPTX, DOCX)
-- Participant accounts created with workspace access
 - Network connectivity to SharePoint and Elasticsearch verified
 - Pre-built notebooks loaded for guided exercises
 
@@ -29,6 +63,7 @@
 ### Block 1: Foundations (8:00 - 9:30) -- 1.5 hrs
 
 #### Databricks Platform Orientation (8:00 - 8:45) -- 45 min | Guided
+
 > *Goal: Get all participants comfortable navigating the workspace.*
 
 - Welcome and workshop objectives
@@ -40,6 +75,7 @@
 - Hands-on: Each participant opens the workspace, navigates to the pre-loaded catalog, and runs a "hello world" notebook
 
 #### Core Concepts for Today (8:45 - 9:30) -- 45 min | Guided
+
 > *Goal: Establish the mental model for how Databricks replaces the queue-based microservices pattern.*
 
 - Delta Lake: what it is and why it replaces S3 + SQS as the glue between pipeline stages
@@ -57,6 +93,7 @@
 ### Block 2: Ingestion -- SharePoint Connector (9:45 - 11:00) -- 1.25 hrs
 
 #### Guided: Connecting to SharePoint (9:45 - 10:15) -- 30 min
+
 > *Goal: Demonstrate that a single connection replaces the custom SharePoint sync service.*
 
 - Walk through the pre-configured Unity Catalog connection (OAuth setup)
@@ -67,6 +104,7 @@
 - Discuss how metadata-based filtering replaces folder exclusion logic
 
 #### Guided: Auto Loader for Incremental Processing (10:15 - 10:45) -- 30 min
+
 > *Goal: Show how Auto Loader handles full and incremental crawls automatically.*
 
 - Switch from batch `spark.read` to streaming `spark.readStream` with `cloudFiles`
@@ -77,6 +115,7 @@
 - **Direct answer to their question**: full crawl = first run with `includeExistingFiles=True`; incremental = every subsequent trigger
 
 #### Hands-on Exercise (10:45 - 11:00) -- 15 min
+
 > *Participants work through a notebook that reads files from a pre-loaded Volume (or SharePoint if connectivity allows) using both batch and streaming modes.*
 
 - Read PDF and PPTX files from a Volume
@@ -89,6 +128,7 @@
 ### Block 3: Document Parsing (11:00 - 11:55) -- 55 min
 
 #### Guided: ai_parse_document (11:00 - 11:25) -- 25 min
+
 > *Goal: Show that a single SQL function replaces the Parsing Service + Conversion Service + Step Functions.*
 
 - Introduction to `ai_parse_document` -- multimodal foundation model, no infrastructure to manage
@@ -101,6 +141,7 @@
 - Show how to flatten/explode the parsed output into a tabular format
 
 #### Hands-on Exercise (11:25 - 11:55) -- 30 min
+
 > *Participants parse documents from the ingestion step and explore the output.*
 
 - Use `ai_parse_document` on their ingested files (SQL and Python)
@@ -112,6 +153,7 @@
 ---
 
 ### Day 1 Wrap-Up (11:55 - 12:00) -- 5 min
+
 - Recap what we covered: platform orientation, SharePoint ingestion, document parsing
 - Preview Day 2: LLM enrichment, full pipeline assembly, Elasticsearch, hackathon
 - Encourage participants to explore the workspace between sessions
@@ -123,6 +165,7 @@
 ---
 
 ### Day 1 Recap and Day 2 Preview (8:00 - 8:15) -- 15 min
+
 - Quick recap: what we built on Day 1 (ingestion + parsing)
 - Address any questions that came up between sessions
 - Day 2 roadmap: LLM enrichment, assembling the full pipeline, Elasticsearch sink, hackathon
@@ -132,6 +175,7 @@
 ### Block 4: LLM Enrichment (8:15 - 9:30) -- 1.25 hrs
 
 #### Guided: AI Functions for Enrichment (8:15 - 8:45) -- 30 min
+
 > *Goal: Show that SQL-native AI functions replace the Enrichment Service + Tagging Service + Embedding Service.*
 
 - Overview of Databricks AI Functions: `ai_query`, `ai_classify`, `ai_extract`, `ai_summarize`, `ai_similarity`
@@ -150,6 +194,7 @@
 - Discuss batch processing best practices: `failOnError => false`, full-dataset queries
 
 #### Guided: Creating Reusable Enrichment Functions (8:45 - 9:00) -- 15 min
+
 > *Goal: Show how SQL UDFs create reusable enrichment steps, similar to microservice contracts.*
 
 - Create a SQL UDF wrapping `ai_query` for document classification
@@ -158,6 +203,7 @@
 - Discuss how this maps to their architecture: one UDF per enrichment type vs. one microservice per enrichment type
 
 #### Hands-on Exercise (9:00 - 9:30) -- 30 min
+
 > *Participants enrich their parsed documents with LLM calls.*
 
 - Summarize parsed documents using `ai_query`
@@ -175,6 +221,7 @@
 ### Block 5: End-to-End Pipeline + Elasticsearch Sink (9:45 - 10:45) -- 1 hr
 
 #### Guided: Writing to Elasticsearch (9:45 - 10:05) -- 20 min
+
 > *Goal: Show the final mile -- writing enriched content to Elastic.*
 
 - Configure the es-hadoop Spark connector (pre-installed on cluster)
@@ -183,6 +230,7 @@
 - Discuss: Delta table as primary store, Elasticsearch as search index (separation of storage and search)
 
 #### Guided: Assembling the Declarative Pipeline (10:05 - 10:45) -- 40 min
+
 > *Goal: Combine all pieces into a single Lakeflow Declarative Pipeline that replaces the entire microservices architecture.*
 
 - Walk through a complete pipeline definition:
@@ -205,16 +253,19 @@
 
 #### Suggested Challenges (pick 1-2)
 
-| # | Challenge | Difficulty | Maps to Their Need |
-|---|-----------|------------|-------------------|
-| 1 | **Custom enrichment chain**: Build a multi-step enrichment flow -- classify, then extract entities, then summarize -- storing intermediate results in Delta tables | Medium | Enrichment + Tagging Services |
-| 2 | **Metadata-driven routing**: Use SharePoint metadata or file properties to route documents through different parsing/enrichment paths | Medium | Folder/metadata exclusion, per-source pipelines |
-| 3 | **Multimodal slide analysis**: For each slide image, use a vision model to describe visual content, extract chart data, and identify logos/branding | Hard | Image extraction + LLM enrichment |
-| 4 | **Incremental pipeline with change tracking**: Build a pipeline that detects when a SharePoint document is updated (not just new) and re-processes only changed documents | Hard | Full vs. incremental crawl management |
-| 5 | **Elasticsearch index design**: Design an ES index mapping that supports their search use cases, write enriched documents, and query from a notebook | Medium | Write to Elastic |
-| 6 | **Data quality and observability**: Add comprehensive expectations to the pipeline, set up alerts on quality violations, and explore system tables for pipeline monitoring | Medium | Operational concerns |
+
+| #   | Challenge                                                                                                                                                                  | Difficulty | Maps to Their Need                              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------- |
+| 1   | **Custom enrichment chain**: Build a multi-step enrichment flow -- classify, then extract entities, then summarize -- storing intermediate results in Delta tables         | Medium     | Enrichment + Tagging Services                   |
+| 2   | **Metadata-driven routing**: Use SharePoint metadata or file properties to route documents through different parsing/enrichment paths                                      | Medium     | Folder/metadata exclusion, per-source pipelines |
+| 3   | **Multimodal slide analysis**: For each slide image, use a vision model to describe visual content, extract chart data, and identify logos/branding                        | Hard       | Image extraction + LLM enrichment               |
+| 4   | **Incremental pipeline with change tracking**: Build a pipeline that detects when a SharePoint document is updated (not just new) and re-processes only changed documents  | Hard       | Full vs. incremental crawl management           |
+| 5   | **Elasticsearch index design**: Design an ES index mapping that supports their search use cases, write enriched documents, and query from a notebook                       | Medium     | Write to Elastic                                |
+| 6   | **Data quality and observability**: Add comprehensive expectations to the pipeline, set up alerts on quality violations, and explore system tables for pipeline monitoring | Medium     | Operational concerns                            |
+
 
 #### Resources Available During Hackathon
+
 - Pre-built notebook templates for each challenge
 - Databricks documentation links
 - Sample documents of varying complexity
@@ -225,31 +276,36 @@
 ### Block 7: Wrap-Up and Architecture Discussion (12:00 - 12:45) -- 45 min
 
 #### Hackathon Share-Out (12:00 - 12:15) -- 15 min
+
 - Teams briefly demo what they built
 - Discussion of challenges encountered and solutions found
 
 #### Architecture Deep Dive (12:15 - 12:35) -- 20 min
+
 > *Revisit the original architecture diagram with everything learned.*
 
 - Side-by-side comparison: current AWS architecture vs. Databricks-based architecture
 - Component mapping:
-  | Current (AWS) | Databricks Equivalent |
-  |---|---|
-  | SharePoint sync Lambda | SharePoint Connector + Auto Loader |
-  | S3 staging buckets | Unity Catalog Volumes + Delta Tables |
-  | 13 SQS queues | Implicit -- pipeline DAG handles ordering |
-  | Parsing Service | `ai_parse_document` |
-  | Conversion Service + Step Functions | Lakeflow Declarative Pipeline |
+
+  | Current (AWS)                             | Databricks Equivalent                                  |
+  | ----------------------------------------- | ------------------------------------------------------ |
+  | SharePoint sync Lambda                    | SharePoint Connector + Auto Loader                     |
+  | S3 staging buckets                        | Unity Catalog Volumes + Delta Tables                   |
+  | 13 SQS queues                             | Implicit -- pipeline DAG handles ordering              |
+  | Parsing Service                           | `ai_parse_document`                                    |
+  | Conversion Service + Step Functions       | Lakeflow Declarative Pipeline                          |
   | Enrichment / Tagging / Embedding Services | AI Functions (`ai_query`, `ai_classify`, `ai_extract`) |
-  | DynamoDB state tables | Delta Lake (ACID, time travel, CDF) |
-  | Voyager Orchestrator | Lakeflow pipeline scheduler |
-  | CloudWatch monitoring | Pipeline event log + system tables |
-  | Elasticsearch writes | `foreach_batch_sink` in pipeline |
+  | DynamoDB state tables                     | Delta Lake (ACID, time travel, CDF)                    |
+  | Voyager Orchestrator                      | Lakeflow pipeline scheduler                            |
+  | CloudWatch monitoring                     | Pipeline event log + system tables                     |
+  | Elasticsearch writes                      | `foreach_batch_sink` in pipeline                       |
+
 - Discuss: single pipeline vs. per-source pipelines
   - Recommendation: shared downstream stages (parsing, enrichment, ES sink), separate ingestion tables per source using `@dp.append_flow`
 - Governance: Unity Catalog for access control, lineage, auditing
 
 #### Open Q&A and Next Steps (12:35 - 12:45) -- 10 min
+
 - Address remaining questions
 - Discuss: what would a production migration path look like?
 - Identify any gaps or features that need further investigation
@@ -260,6 +316,7 @@
 ## Pre-Loaded Workshop Artifacts
 
 ### Notebooks to Prepare
+
 1. `00_hello_databricks` -- Workspace orientation, basic SQL/Python, catalog exploration
 2. `01_sharepoint_ingestion` -- SharePoint connector examples (batch + streaming)
 3. `02_document_parsing` -- `ai_parse_document` with PDF and PPTX samples
@@ -269,12 +326,14 @@
 7. `06_hackathon_templates` -- Starter notebooks for each hackathon challenge
 
 ### Sample Data
+
 - 10-15 PDF documents of varying complexity (text-heavy, tables, images)
 - 5-10 PowerPoint presentations (mix of text slides and visual slides)
 - 3-5 Word documents
 - Pre-parsed Delta table (for participants who want to skip ahead to enrichment)
 
 ### Cluster Configuration
+
 - DBR 18.x (for SharePoint metadata support)
 - Libraries: `org.elasticsearch:elasticsearch-spark-30_2.12`, `python-pptx`, `PyMuPDF`
 - Serverless SQL warehouse (for AI Functions in SQL editor)
@@ -284,17 +343,19 @@
 
 ## Key Databricks Features Demonstrated
 
-| Feature | Status | Workshop Block |
-|---------|--------|----------------|
-| SharePoint Connector | Beta (DBR 17.3+) | Block 2 |
-| Auto Loader (cloudFiles) | GA | Block 2 |
-| `ai_parse_document` | GA | Block 3 |
-| AI Functions (`ai_query`, `ai_classify`, `ai_extract`) | Public Preview | Block 4 |
-| Multimodal LLM (Llama 4 Maverick) | GA | Block 4 |
-| Lakeflow Declarative Pipelines | GA | Block 5 |
-| `foreach_batch_sink` (Elastic write) | GA | Block 5 |
-| Unity Catalog Volumes | GA | Throughout |
-| Data Quality Expectations | GA | Block 5 |
+
+| Feature                                                | Status           | Workshop Block |
+| ------------------------------------------------------ | ---------------- | -------------- |
+| SharePoint Connector                                   | Beta (DBR 17.3+) | Block 2        |
+| Auto Loader (cloudFiles)                               | GA               | Block 2        |
+| `ai_parse_document`                                    | GA               | Block 3        |
+| AI Functions (`ai_query`, `ai_classify`, `ai_extract`) | Public Preview   | Block 4        |
+| Multimodal LLM (Llama 4 Maverick)                      | GA               | Block 4        |
+| Lakeflow Declarative Pipelines                         | GA               | Block 5        |
+| `foreach_batch_sink` (Elastic write)                   | GA               | Block 5        |
+| Unity Catalog Volumes                                  | GA               | Throughout     |
+| Data Quality Expectations                              | GA               | Block 5        |
+
 
 ---
 
@@ -302,27 +363,34 @@
 
 ### Day 1 (8:00 - 12:00)
 
-| Block | Time | Duration | Mode |
-|-------|------|----------|------|
-| 1 - Foundations | 8:00 - 9:30 | 1h 30m | Guided |
-| Break | 9:30 - 9:45 | 15m | -- |
-| 2 - Ingestion (SharePoint + Auto Loader) | 9:45 - 11:00 | 1h 15m | Guided + Hands-on |
-| 3 - Document Parsing | 11:00 - 11:55 | 55m | Guided + Hands-on |
-| Day 1 Wrap-Up | 11:55 - 12:00 | 5m | Discussion |
-| **Day 1 Total** | | **4h** | |
+
+| Block                                    | Time          | Duration | Mode              |
+| ---------------------------------------- | ------------- | -------- | ----------------- |
+| 1 - Foundations                          | 8:00 - 9:30   | 1h 30m   | Guided            |
+| Break                                    | 9:30 - 9:45   | 15m      | --                |
+| 2 - Ingestion (SharePoint + Auto Loader) | 9:45 - 11:00  | 1h 15m   | Guided + Hands-on |
+| 3 - Document Parsing                     | 11:00 - 11:55 | 55m      | Guided + Hands-on |
+| Day 1 Wrap-Up                            | 11:55 - 12:00 | 5m       | Discussion        |
+| **Day 1 Total**                          |               | **4h**   |                   |
+
 
 ### Day 2 (8:00 - 12:45)
 
-| Block | Time | Duration | Mode |
-|-------|------|----------|------|
-| Day 1 Recap + Day 2 Preview | 8:00 - 8:15 | 15m | Discussion |
-| 4 - LLM Enrichment | 8:15 - 9:30 | 1h 15m | Guided + Hands-on |
-| Break | 9:30 - 9:45 | 15m | -- |
-| 5 - Pipeline + Elasticsearch | 9:45 - 10:45 | 1h | Guided |
-| 6 - Hackathon | 10:45 - 12:00 | 1h 15m | Self-directed |
-| 7 - Wrap-up + Architecture | 12:00 - 12:45 | 45m | Discussion |
-| **Day 2 Total** | | **4h 45m** | |
 
-| | |
-|---|---|
+| Block                        | Time          | Duration   | Mode              |
+| ---------------------------- | ------------- | ---------- | ----------------- |
+| Day 1 Recap + Day 2 Preview  | 8:00 - 8:15   | 15m        | Discussion        |
+| 4 - LLM Enrichment           | 8:15 - 9:30   | 1h 15m     | Guided + Hands-on |
+| Break                        | 9:30 - 9:45   | 15m        | --                |
+| 5 - Pipeline + Elasticsearch | 9:45 - 10:45  | 1h         | Guided            |
+| 6 - Hackathon                | 10:45 - 12:00 | 1h 15m     | Self-directed     |
+| 7 - Wrap-up + Architecture   | 12:00 - 12:45 | 45m        | Discussion        |
+| **Day 2 Total**              |               | **4h 45m** |                   |
+
+
+
+|                    |                                                   |
+| ------------------ | ------------------------------------------------- |
 | **Workshop Total** | **~8 hrs of content across two morning sessions** |
+
+
