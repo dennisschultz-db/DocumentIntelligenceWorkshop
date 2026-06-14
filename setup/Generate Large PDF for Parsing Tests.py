@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # DBTITLE 1,Overview
 # MAGIC %md
 # MAGIC # Generate Large PDF for Parsing Tests
@@ -95,7 +99,7 @@ def add_table(pdf):
 def generate_pdf(output_path, total_pages=1010):
     """Generate a multi-page PDF with varied content."""
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_auto_page_break(auto=False)
 
     for page_num in range(1, total_pages + 1):
         pdf.add_page()
@@ -143,7 +147,7 @@ def generate_pdf(output_path, total_pages=1010):
 
 
 # Generate the PDF
-output_path = "/Volumes/dennis_schultz/sharepoint_testing/test_documents/large_test_document_1010_pages.pdf"
+output_path = "/Volumes/dennis_schultz/sharepoint_testing/test_documents/large_pdfs/large_test_document_1010_pages.pdf"
 print("Starting PDF generation (1,010 pages)...")
 generate_pdf(output_path, total_pages=1010)
 
@@ -159,7 +163,7 @@ generate_pdf(output_path, total_pages=1010)
 # DBTITLE 1,Verify Output File
 import os
 
-file_path = "/Volumes/dennis_schultz/sharepoint_testing/test_documents/large_test_document_1010_pages.pdf"
+file_path = "/Volumes/dennis_schultz/sharepoint_testing/test_documents/large_pdfs/large_test_document_1010_pages.pdf"
 
 if os.path.exists(file_path):
     size_bytes = os.path.getsize(file_path)
