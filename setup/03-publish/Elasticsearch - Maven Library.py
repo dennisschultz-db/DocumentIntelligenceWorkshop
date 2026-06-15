@@ -24,16 +24,21 @@
 # COMMAND ----------
 
 # DBTITLE 1,Variables
+import os
+
 hosted_hostname = "mytestes-0b283a.es.us-east-1.aws.found.io" # managed
 port = "443"
 ssl = "true"
 index = "people"
 
+os.environ["HOSTED_HOSTNAME"] = hosted_hostname
+os.environ["PORT"] = port
+
 # COMMAND ----------
 
 # DBTITLE 1,Test connectivity to your Elasticsearch cluster
-# MAGIC %sh 
-# MAGIC nc -vz hosted_hostname port
+# MAGIC %sh
+# MAGIC nc -vz "$HOSTED_HOSTNAME" "$PORT"
 
 # COMMAND ----------
 
