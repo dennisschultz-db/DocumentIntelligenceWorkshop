@@ -11,10 +11,6 @@
 - Serverless compute enabled (required for AI Functions)
 - Participant accounts created with workspace access
   - Entitlements granted via group
-- DBR 17.3 LTS+ cluster configured (classic cluster required for Elasticsearch Maven library installation)
-  - For **Standard** access mode, you will need to whiteList the Maven coordinates used to load the library into the compute. This requires Metastore admin permissions.
-  - For **Dedicated** access mode, you will need an Account-level group if more than one person is to have access.
-  - Install the Elasticsearch connector library (es-hadoop) `org.elasticsearch:elasticsearch-spark-30_2.13:9.3.2` Maven library on the culster
 - Previews enabled
   - Beta
     - AI Prep Search
@@ -47,9 +43,14 @@
   - Advanced -> Choose entitlements when adding principals to workspaces
 - SharePoint OAuth connection pre-configured in Unity Catalog
   - This will require a Principal for access, or one of the other access modes
-- Sample documents uploaded to a Unity Catalog Volume (PDFs, PPTX, DOCX)
+- DBR 17.3 LTS+ cluster configured (classic cluster required for Elasticsearch Maven library installation)
+  - For **Standard** access mode, you will need to whiteList the Maven coordinates used to load the library into the compute. This requires Metastore admin permissions.
+  - For **Dedicated** access mode, you will need an Account-level group if more than one person is to have access.
+  - Install the Elasticsearch connector library (es-hadoop) `org.elasticsearch:elasticsearch-spark-30_2.13:9.3.2` Maven library on the culster
 - Network connectivity to SharePoint and Elasticsearch verified
-- Pre-built notebooks loaded for guided exercises
+- Git Folder to https://github.com/dennisschultz-db/DocumentIntelligenceWorkshop
+  - Pre-built notebooks loaded for guided exercises
+- Sample documents uploaded to a Unity Catalog Volume (PDFs, PPTX, DOCX)
 
 ---
 
