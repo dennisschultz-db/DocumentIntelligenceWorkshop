@@ -43,14 +43,17 @@
   - Advanced -> Choose entitlements when adding principals to workspaces
 - SharePoint OAuth connection pre-configured in Unity Catalog
   - This will require a Principal for access, or one of the other access modes
-- DBR 17.3 LTS+ cluster configured (classic cluster required for Elasticsearch Maven library installation)
+- DBR `16.4 LTS (includes Apache Spark 3.5.2, Scala 2.13)` cluster configured (classic cluster required for Elasticsearch Maven library installation)
   - For **Standard** access mode, you will need to whiteList the Maven coordinates used to load the library into the compute. This requires Metastore admin permissions.
   - For **Dedicated** access mode, you will need an Account-level group if more than one person is to have access.
   - Install the Elasticsearch connector library (es-hadoop) `org.elasticsearch:elasticsearch-spark-30_2.13:9.3.2` Maven library on the culster
 - Network connectivity to SharePoint and Elasticsearch verified
 - Git Folder to https://github.com/dennisschultz-db/DocumentIntelligenceWorkshop
   - Pre-built notebooks loaded for guided exercises
-- Sample documents uploaded to a Unity Catalog Volume (PDFs, PPTX, DOCX)
+- Run `Pre-workshop Setup` notebook
+  - Create schema and volumes
+  - Permissions granted for participants
+  - Sample documents uploaded to a Unity Catalog Volume (PDFs, PPTX, DOCX)
 
 ---
 
@@ -336,9 +339,9 @@
 
 ### Cluster Configuration
 
-- DBR 18.x (for SharePoint metadata support)
-- Libraries: `org.elasticsearch:elasticsearch-spark-30_2.12`, `python-pptx`, `PyMuPDF`
-- Serverless SQL warehouse (for AI Functions in SQL editor)
+- 16.4 LTS (includes Apache Spark 3.5.2, Scala 2.13) (for Elasticsearch Maven support)
+- Libraries: `org.elasticsearch:elasticsearch-spark-30_2.13:9.3.2`, `python-pptx`, `PyMuPDF`
+- Serverless SQL warehouse (for SharePoint ingestion, AI Functions in SQL editor, and everything other than Elasticsearch Maven library)
 - Shared compute policy for all participants
 
 ---
