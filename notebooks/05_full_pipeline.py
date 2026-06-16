@@ -317,7 +317,7 @@ def es_output_flow():
 # MAGIC | **Triggered (batch)** | Processes all available data, then stops | Scheduled runs (e.g., every hour, nightly) |
 # MAGIC | **Continuous (streaming)** | Runs indefinitely, processing data as it arrives | Near-real-time requirements (sub-minute latency) |
 # MAGIC
-# MAGIC For the Bain use case, **triggered mode on a schedule** (e.g., every 30 minutes) is likely the right starting point. Documents arrive throughout the day but do not need sub-second processing. You can always switch to continuous mode later without changing any code.
+# MAGIC For a typical enterprise use case, **triggered mode on a schedule** (e.g., every 30 minutes) is likely the right starting point. Documents arrive throughout the day but do not need sub-second processing. You can always switch to continuous mode later without changing any code.
 # MAGIC
 # MAGIC > **Presenter note:** If you have a live workspace available, walk through creating the pipeline in the UI. Show the configuration screen. Emphasize that the entire deployment is: (1) point at a notebook, (2) set catalog and schema, (3) click Run. No CI/CD pipeline needed for the initial setup -- though of course you would add that for production. The contrast with deploying a new microservice (Docker build, ECR push, ECS task definition update, CloudFormation/Terraform) should be stark.
 
@@ -362,7 +362,7 @@ def es_output_flow():
 # MAGIC
 # MAGIC This mirrors a pattern you already use: your current microservices have shared downstream processing (enrichment, Elasticsearch) fed by multiple upstream triggers. The difference is that this pattern is expressed in 10 lines of code instead of 10 infrastructure components.
 # MAGIC
-# MAGIC > **Presenter note:** This is a natural architecture discussion point. Let the audience debate for a few minutes. Some teams prefer full isolation (Option B) for operational simplicity. Others prefer shared downstream (Option A) for code reuse. There is no wrong answer, but Option A is typically better for organizations with many similar sources feeding the same enrichment and search pipeline -- which is exactly Bain's situation.
+# MAGIC > **Presenter note:** This is a natural architecture discussion point. Let the audience debate for a few minutes. Some teams prefer full isolation (Option B) for operational simplicity. Others prefer shared downstream (Option A) for code reuse. There is no wrong answer, but Option A is typically better for organizations with many similar sources feeding the same enrichment and search pipeline -- which is exactly the situation for organizations with diverse document sources.
 
 # COMMAND ----------
 

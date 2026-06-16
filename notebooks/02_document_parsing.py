@@ -427,7 +427,7 @@ df_parsed = df.withColumn(
     expr("ai_parse_document(content, MAP('version', '2.0'))")
 )
 
-df_parsed.write.mode("overwrite").saveAsTable("workshop.default.parsed_documents")
+df_parsed.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.parsed_documents")
 print("Parsed documents saved!")
 
 # COMMAND ----------

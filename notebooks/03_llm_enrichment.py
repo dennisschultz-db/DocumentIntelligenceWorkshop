@@ -63,6 +63,10 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_resources/Config
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ### Step 1: Prepare Text Data from Parsed Documents
 # MAGIC
@@ -70,20 +74,26 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- First, let's prepare our document text for enrichment
-# MAGIC -- We reassemble parsed elements into full document text
-# MAGIC CREATE OR REPLACE TABLE workshop.default.document_text AS
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   concat_ws('\n', collect_list(elem.content)) AS full_text
-# MAGIC FROM workshop.default.parsed_documents
-# MAGIC LATERAL VIEW explode(parsed:elements) AS elem
-# MAGIC WHERE elem.type IN ('text', 'title', 'section_header')
-# MAGIC GROUP BY path;
-# MAGIC
-# MAGIC SELECT path, length(full_text) AS text_length, left(full_text, 200) AS preview
-# MAGIC FROM workshop.default.document_text
+# DBTITLE 1,Extract full text
+# Reassemble parsed elements into full document text
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.document_text AS
+  SELECT
+    path,
+    concat_ws('\\n', collect_list(elem.content)) AS full_text
+  FROM {catalog}.{schema}.parsed_documents
+  LATERAL VIEW explode(parsed:elements) AS elem
+  WHERE elem.type IN ('text', 'title', 'section_header')
+  GROUP BY path
+""")
+
+display(spark.sql(f"""
+  SELECT 
+    path, 
+    length(full_text) AS text_length, 
+    left(full_text, 200) AS preview
+  FROM {catalog}.{schema}.document_text
+"""))
 
 # COMMAND ----------
 
@@ -96,16 +106,21 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Use ai_query to generate document summaries
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_query(
-# MAGIC     'databricks-meta-llama-3-3-70b-instruct',
-# MAGIC     'Summarize this document in 3-5 sentences. Focus on the key topics and conclusions:\n\n' || left(full_text, 4000)
-# MAGIC   ) AS summary
-# MAGIC FROM workshop.default.document_text
-# MAGIC LIMIT 3
+# DBTITLE 1,Summarize documents with an LLM
+# Use ai_query to generate document summaries
+llm_model = "databricks-meta-llama-3-3-70b-instruct"
+prompt = "Summarize this document in 3-5 sentences. Focus on the key topics and conclusions:"
+
+display(spark.sql(f"""
+  SELECT
+    path,
+    ai_query(
+      '{llm_model}',
+      '{prompt}\\n\\n' || left(full_text, 4000)
+    ) AS summary
+  FROM {catalog}.{schema}.document_text
+  LIMIT 3
+"""))
 
 # COMMAND ----------
 
@@ -116,16 +131,22 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Classify documents into predefined categories
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_classify(
-# MAGIC     left(full_text, 2000),
-# MAGIC     ARRAY('report', 'presentation', 'memo', 'proposal', 'technical', 'financial', 'marketing', 'legal', 'other')
-# MAGIC   ) AS category
-# MAGIC FROM workshop.default.document_text
-# MAGIC LIMIT 5
+# DBTITLE 1,Classify documents
+
+# Classify documents using VARIANT chaining -- no text reassembly needed!
+# ai_classify v2 accepts the parsed VARIANT directly from ai_parse_document,
+# preserving document structure (titles, tables, sections) for better accuracy
+display(spark.sql(f"""
+  SELECT
+    path,
+    ai_classify(
+      parsed,
+      '["report", "presentation", "memo", "proposal", "technical", "financial", "marketing", "legal", "other"]',
+      MAP('version', '2.0')
+    ) AS category
+  FROM {catalog}.{schema}.parsed_documents
+  LIMIT 5
+"""))
 
 # COMMAND ----------
 
@@ -136,17 +157,26 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Extract structured fields from document text
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_extract(
-# MAGIC     left(full_text, 4000),
-# MAGIC     ARRAY('title', 'author', 'date', 'key_topics', 'summary'),
-# MAGIC     MAP('instructions', 'Extract these fields from the document. Return null if not found.')
-# MAGIC   ) AS extracted
-# MAGIC FROM workshop.default.document_text
-# MAGIC LIMIT 3
+# DBTITLE 1,Extract fields
+# Extract structured fields directly from parsed VARIANT -- no text reassembly needed!
+# ai_extract accepts the ai_parse_document VARIANT output, leveraging document structure
+extract_instructions = "Extract these fields from the document. Return null if not found."
+
+display(spark.sql(f"""
+  SELECT
+    path,
+    ai_extract(
+      parsed,
+      '["title", "author", "date", "key_topics", "summary"]',
+      MAP(
+          'instructions', '{extract_instructions}',
+          'version', '2.1',
+          'enableCitations', 'true',
+          'enableConfidenceScores', 'true')
+    ) AS extracted
+  FROM {catalog}.{schema}.parsed_documents
+  LIMIT 3
+"""))
 
 # COMMAND ----------
 
@@ -159,17 +189,21 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Use ai_query with structured output for complex metadata extraction
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_query(
-# MAGIC     'databricks-meta-llama-3-3-70b-instruct',
-# MAGIC     'Analyze this document and extract structured metadata:\n\n' || left(full_text, 4000),
-# MAGIC     responseFormat => 'STRUCT<title:STRING, document_type:STRING, key_topics:ARRAY<STRING>, sentiment:STRING, actionable_items:ARRAY<STRING>>'
-# MAGIC   ) AS structured_analysis
-# MAGIC FROM workshop.default.document_text
-# MAGIC LIMIT 3
+# DBTITLE 1,Extract metadata
+# Use ai_query with structured output for complex metadata extraction
+llm_model = "databricks-meta-llama-3-3-70b-instruct"
+
+display(spark.sql(f"""
+  SELECT
+    path,
+    ai_query(
+      '{llm_model}',
+      'Analyze this document and extract structured metadata:\\n\\n' || left(full_text, 4000),
+      responseFormat => '{response_format}'
+    ) AS structured_analysis
+  FROM {catalog}.{schema}.document_text
+  LIMIT 3
+"""))
 
 # COMMAND ----------
 
@@ -188,18 +222,25 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Send slide images to a vision model for analysis
-# MAGIC -- This reads image files directly from a Volume and sends them to Llama 4 Maverick
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_query(
-# MAGIC     'databricks-llama-4-maverick',
-# MAGIC     'Describe what is shown in this slide image. Extract any visible text, describe charts or diagrams, and identify key visual elements.',
-# MAGIC     files => content
-# MAGIC   ) AS image_analysis
-# MAGIC FROM read_files('/Volumes/workshop/default/slide_images/', format => 'binaryFile')
-# MAGIC LIMIT 3
+# DBTITLE 1,Analyze slide images
+# Send slide images to a vision model for analysis
+# Reads image files directly from a Volume and sends them to Llama 4 Maverick
+vision_model = "databricks-llama-4-maverick"
+vision_prompt = "Describe what is shown in this slide image. Extract any visible text, describe charts or diagrams, and identify key visual elements."
+
+display(spark.sql(f"""
+  SELECT
+    path,
+    ai_query(
+      '{vision_model}',
+      '{vision_prompt}',
+      files => content
+    ) AS image_analysis
+  FROM read_files(
+    f'/Volumes/{catalog}/{schema}/{personal_volume}/slide_images', 
+    format => 'binaryFile')
+  LIMIT 3
+"""))
 
 # COMMAND ----------
 
@@ -235,11 +276,15 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Create a reusable classification function
-# MAGIC CREATE OR REPLACE FUNCTION workshop.default.classify_document(text STRING)
-# MAGIC RETURNS STRING
-# MAGIC RETURN ai_classify(text, ARRAY('report', 'presentation', 'memo', 'proposal', 'technical', 'financial', 'marketing', 'legal'));
+# DBTITLE 1,Classification UDF
+# Create a reusable classification function
+spark.sql(f"""
+  CREATE OR REPLACE FUNCTION {catalog}.{schema}.classify_document(text STRING)
+  RETURNS STRING
+  RETURN ai_classify(
+    text, 
+    ARRAY('report', 'presentation', 'memo', 'proposal', 'technical', 'financial', 'marketing', 'legal'))
+""")
 
 # COMMAND ----------
 
@@ -250,15 +295,20 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Create a reusable summarization function
-# MAGIC CREATE OR REPLACE FUNCTION workshop.default.summarize_document(text STRING)
-# MAGIC RETURNS STRING
-# MAGIC RETURN ai_query(
-# MAGIC   'databricks-meta-llama-3-3-70b-instruct',
-# MAGIC   'Provide a concise 2-3 sentence summary:\n\n' || text,
-# MAGIC   modelParameters => named_struct('max_tokens', 200, 'temperature', 0.3)
-# MAGIC );
+# DBTITLE 1,Summarization UDF
+# Create a reusable summarization function
+max_tokens = 200
+temperature = 0.3
+
+spark.sql(f"""
+  CREATE OR REPLACE FUNCTION {catalog}.{schema}.summarize_document(text STRING)
+  RETURNS STRING
+  RETURN ai_query(
+    '{llm_model}',
+    'Provide a concise 2-3 sentence summary:\\n\\n' || text,
+    modelParameters => named_struct('max_tokens', {max_tokens}, 'temperature', {temperature})
+  )
+""")
 
 # COMMAND ----------
 
@@ -269,14 +319,16 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Use our custom UDFs to enrich documents
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   workshop.default.classify_document(left(full_text, 2000)) AS category,
-# MAGIC   workshop.default.summarize_document(left(full_text, 4000)) AS summary
-# MAGIC FROM workshop.default.document_text
-# MAGIC LIMIT 3
+# DBTITLE 1,Apply UDF functions
+# Use our custom UDFs to enrich documents
+display(spark.sql(f"""
+  SELECT
+    path,
+    {catalog}.{schema}.classify_document(left(full_text, {max_classify_chars})) AS category,
+    {catalog}.{schema}.summarize_document(left(full_text, {max_summary_chars})) AS summary
+  FROM {catalog}.{schema}.document_text
+  LIMIT 3
+"""))
 
 # COMMAND ----------
 
@@ -317,20 +369,22 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- TODO: Exercise 1 - Summarize all documents and save to a table
-# MAGIC -- Hint: Use ai_query with failOnError => false for robustness
-# MAGIC -- Save the results with CREATE OR REPLACE TABLE
-# MAGIC
-# MAGIC CREATE OR REPLACE TABLE workshop.default.document_summaries AS
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_query(
-# MAGIC     'databricks-meta-llama-3-3-70b-instruct',
-# MAGIC     'Summarize this document in 3-5 sentences. Focus on the key topics and conclusions:\n\n' || left(full_text, 4000),
-# MAGIC     failOnError => false
-# MAGIC   ) AS summary
-# MAGIC FROM workshop.default.document_text
+# DBTITLE 1,Summarize documents
+# TODO: Exercise 1 - Summarize all documents and save to a table
+# Uses failOnError => false for robustness
+summary_prompt = "Summarize this document in 3-5 sentences. Focus on the key topics and conclusions:"
+
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.document_summaries AS
+  SELECT
+    path,
+    ai_query(
+      '{llm_model}',
+      '{summary_prompt}\\n\\n' || left(full_text, 4000),
+      failOnError => false
+    ) AS summary
+  FROM {catalog}.{schema}.document_text
+""")
 
 # COMMAND ----------
 
@@ -341,19 +395,20 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- TODO: Exercise 2 - Classify documents into custom categories
-# MAGIC -- Replace the categories below with ones relevant to YOUR documents
-# MAGIC
-# MAGIC CREATE OR REPLACE TABLE workshop.default.document_categories AS
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_classify(
-# MAGIC     left(full_text, 2000),
-# MAGIC     -- TODO: Replace these categories with your own
-# MAGIC     ARRAY('strategy', 'operations', 'finance', 'technology', 'hr', 'legal', 'marketing', 'other')
-# MAGIC   ) AS category
-# MAGIC FROM workshop.default.document_text
+# DBTITLE 1,Custom category classification
+# TODO: Exercise 2 - Classify documents into custom categories
+# Replace custom_categories variable (defined above) with ones relevant to YOUR documents
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.document_categories AS
+  SELECT
+    path,
+    ai_classify(
+      parsed,
+      '{custom_categories}',
+      MAP('version', '2.0')
+    ) AS category
+  FROM {catalog}.{schema}.parsed_documents
+""")
 
 # COMMAND ----------
 
@@ -364,21 +419,21 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- TODO: Exercise 3 - Extract structured metadata from documents
-# MAGIC -- Customize the struct fields to match your needs
-# MAGIC
-# MAGIC CREATE OR REPLACE TABLE workshop.default.document_metadata AS
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_query(
-# MAGIC     'databricks-meta-llama-3-3-70b-instruct',
-# MAGIC     'Extract structured metadata from this document:\n\n' || left(full_text, 4000),
-# MAGIC     -- TODO: Customize the response format fields below
-# MAGIC     responseFormat => 'STRUCT<title:STRING, document_type:STRING, key_topics:ARRAY<STRING>, sentiment:STRING, actionable_items:ARRAY<STRING>>',
-# MAGIC     failOnError => false
-# MAGIC   ) AS metadata
-# MAGIC FROM workshop.default.document_text
+# DBTITLE 1,Extract in custom format
+# TODO: Exercise 3 - Extract structured metadata from documents
+# Customize response_format variable (defined above) to match your needs
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.document_metadata AS
+  SELECT
+    path,
+    ai_query(
+      '{llm_model}',
+      'Extract structured metadata from this document:\\n\\n' || left(full_text, {max_summary_chars}),
+      responseFormat => '{response_format}',
+      failOnError => false
+    ) AS metadata
+  FROM {catalog}.{schema}.document_text
+""")
 
 # COMMAND ----------
 
@@ -389,21 +444,26 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- TODO (Stretch): Exercise 4 - Analyze slide images with a multimodal model
-# MAGIC -- This requires slide images to be available in the volume from the parsing step
-# MAGIC -- Customize the prompt to extract what's most useful for your use case
-# MAGIC
-# MAGIC -- CREATE OR REPLACE TABLE workshop.default.slide_analysis AS
-# MAGIC -- SELECT
-# MAGIC --   path,
-# MAGIC --   ai_query(
-# MAGIC --     'databricks-llama-4-maverick',
-# MAGIC --     'Analyze this slide image. Extract all visible text, describe any charts or diagrams, and summarize the key message of the slide.',
-# MAGIC --     files => content,
-# MAGIC --     failOnError => false
-# MAGIC --   ) AS slide_description
-# MAGIC -- FROM read_files('/Volumes/workshop/default/slide_images/', format => 'binaryFile')
+# DBTITLE 1,Analyze slide images
+# TODO (Stretch): Exercise 4 - Analyze slide images with a multimodal model
+# This requires slide images to be available in the volume from the parsing step
+# Customize the prompt to extract what's most useful for your use case
+
+slide_prompt = "Analyze this slide image. Extract all visible text, describe any charts or diagrams, and summarize the key message of the slide."
+
+# Uncomment to run:
+# spark.sql(f"""
+#   CREATE OR REPLACE TABLE {catalog}.{schema}.slide_analysis AS
+#   SELECT
+#     path,
+#     ai_query(
+#       '{vision_model}',
+#       '{slide_prompt}',
+#       files => content,
+#       failOnError => false
+#     ) AS slide_description
+#   FROM read_files('{slide_images_path}', format => 'binaryFile')
+# """)
 
 # COMMAND ----------
 
@@ -414,31 +474,32 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- TODO: Exercise 5 - Combine all enrichments into a single table
-# MAGIC -- Join summaries, categories, and metadata into one enriched view
-# MAGIC
-# MAGIC CREATE OR REPLACE TABLE workshop.default.enriched_documents AS
-# MAGIC SELECT
-# MAGIC   t.path,
-# MAGIC   t.full_text,
-# MAGIC   s.summary,
-# MAGIC   c.category,
-# MAGIC   m.metadata,
-# MAGIC   m.metadata.title AS title,
-# MAGIC   m.metadata.key_topics AS key_topics,
-# MAGIC   m.metadata.sentiment AS sentiment,
-# MAGIC   current_timestamp() AS enriched_at
-# MAGIC FROM workshop.default.document_text t
-# MAGIC LEFT JOIN workshop.default.document_summaries s ON t.path = s.path
-# MAGIC LEFT JOIN workshop.default.document_categories c ON t.path = c.path
-# MAGIC LEFT JOIN workshop.default.document_metadata m ON t.path = m.path
+# DBTITLE 1,Combine enrichments
+# TODO: Exercise 5 - Combine all enrichments into a single table
+# Join summaries, categories, and metadata into one enriched view
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.enriched_documents AS
+  SELECT
+    t.path,
+    t.full_text,
+    s.summary,
+    c.category,
+    m.metadata,
+    m.metadata.title AS title,
+    m.metadata.key_topics AS key_topics,
+    m.metadata.sentiment AS sentiment,
+    current_timestamp() AS enriched_at
+  FROM {catalog}.{schema}.document_text t
+  LEFT JOIN {catalog}.{schema}.document_summaries s ON t.path = s.path
+  LEFT JOIN {catalog}.{schema}.document_categories c ON t.path = c.path
+  LEFT JOIN {catalog}.{schema}.document_metadata m ON t.path = m.path
+""")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Verify the enriched documents table
-# MAGIC SELECT * FROM workshop.default.enriched_documents
+# DBTITLE 1,Cell 36
+# Verify the enriched documents table
+display(spark.sql(f"SELECT * FROM {catalog}.{schema}.enriched_documents"))
 
 # COMMAND ----------
 
