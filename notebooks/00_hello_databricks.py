@@ -2,6 +2,9 @@
 # /// script
 # [tool.databricks.environment]
 # environment_version = "5"
+# dependencies = [
+#   "pypdf",
+# ]
 # ///
 # DBTITLE 1,Cell 1
 # MAGIC %md
@@ -372,6 +375,16 @@ print("Hello, Databricks!")
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ## Utilities
+# MAGIC "include" the Utilities notebook to set variables and define reusable routines.
+
+# COMMAND ----------
+
+# MAGIC %run ./_resources/Utilities
+
+# COMMAND ----------
+
 # MAGIC %sql
 # MAGIC -- Let's see what catalogs are available in our workspace
 # MAGIC SHOW CATALOGS
@@ -379,28 +392,28 @@ print("Hello, Databricks!")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC You should see the **`workshop`** catalog in the list above (among others). This is the catalog we will use for all workshop activities.
+# MAGIC You should see the workshop catalog in the list above (among others). This is the catalog we will use for all workshop activities.
 # MAGIC
 # MAGIC Now let's look inside it to see what schemas are available.
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Switch to the workshop catalog and list its schemas
-# MAGIC USE CATALOG workshop;
-# MAGIC SHOW SCHEMAS
+# Switch to the workshop catalog and list its schemas
+spark.sql(f"USE CATALOG {catalog}");
+spark.sql('SHOW SCHEMAS').display();
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC You should see the **`default`** schema. This is where our tables and volumes live.
+# MAGIC You should see the **`00_shared`** schema. This contains tables and volumes that have been provided.
 # MAGIC
 # MAGIC Next, let's look at the files we will be processing. **Volumes** in Unity Catalog are how Databricks manages unstructured files (PDFs, images, etc.) — similar to S3 buckets but with governance and access control built in.
 
 # COMMAND ----------
 
 # Let's list the documents available in our workshop Volume
-display(dbutils.fs.ls("/Volumes/workshop/default/documents/"))
+display(test_documents_volume)
+display(dbutils.fs.ls(f"{test_documents_volume}"))
 
 # COMMAND ----------
 

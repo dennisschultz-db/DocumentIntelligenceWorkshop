@@ -2,11 +2,10 @@
 # /// script
 # [tool.databricks.environment]
 # environment_version = "5"
+# dependencies = [
+#   "pypdf",
+# ]
 # ///
-
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Block 2: SharePoint Ingestion
 # MAGIC **Day 1 | 9:45 - 11:00 AM**
@@ -25,6 +24,10 @@
 # MAGIC %md
 # MAGIC ---
 # MAGIC ## Guided Section: Connecting to SharePoint (30 min)
+
+# COMMAND ----------
+
+# MAGIC %run ./_resources/Utilities
 
 # COMMAND ----------
 
@@ -64,16 +67,13 @@
 # ============================================================
 # Batch read binary files from SharePoint
 # ============================================================
-# NOTE: Replace TENANT with your SharePoint tenant name
-#       Replace SITE with your SharePoint site name
-# ============================================================
 
 df = (spark.read
     .format("binaryFile")
-    .option("databricks.connection", "sharepoint_conn")
+    .option("databricks.connection", sharepoint_connector)
     .option("recursiveFileLookup", True)
     .option("pathGlobFilter", "*.{pdf,pptx,docx}")
-    .load("https://TENANT.sharepoint.com/sites/SITE/Shared%20Documents"))
+    .load(sharepoint_site_url))
 
 display(df.select("path", "modificationTime", "length"))
 
@@ -91,14 +91,12 @@ display(df.select("path", "modificationTime", "length"))
 # MAGIC %sql
 # MAGIC -- ============================================================
 # MAGIC -- SQL approach: read binary files from SharePoint
-# MAGIC -- NOTE: Replace TENANT with your SharePoint tenant name
-# MAGIC --       Replace SITE with your SharePoint site name
 # MAGIC -- ============================================================
 # MAGIC
 # MAGIC SELECT path, length, modificationTime
 # MAGIC FROM read_files(
-# MAGIC   'https://TENANT.sharepoint.com/sites/SITE/Shared%20Documents',
-# MAGIC   `databricks.connection` => 'sharepoint_conn',
+# MAGIC   :sharepoint_site_url,
+# MAGIC   `databricks.connection` => :sharepoint_connector,
 # MAGIC   format => 'binaryFile',
 # MAGIC   pathGlobFilter => '*.{pdf,pptx,docx}',
 # MAGIC   schemaEvolutionMode => 'none'
@@ -148,14 +146,12 @@ display(df.select("path", "modificationTime", "length"))
 
 # ============================================================
 # Explore SharePoint metadata (requires Runtime 18+)
-# NOTE: Replace TENANT with your SharePoint tenant name
-#       Replace SITE with your SharePoint site name
 # ============================================================
 
 df_meta = (spark.read
     .format("binaryFile")
-    .option("databricks.connection", "sharepoint_conn")
-    .load("https://TENANT.sharepoint.com/sites/SITE/Shared%20Documents")
+    .option("databricks.connection", sharepoint_connector)
+    .load(sharepoint_site_url)
     .select("path", "length", "_sharepoint_metadata"))
 
 display(df_meta)
@@ -213,23 +209,21 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # ============================================================
 # Auto Loader: streaming read from SharePoint
-# NOTE: Replace TENANT with your SharePoint tenant name
-#       Replace SITE with your SharePoint site name
 # ============================================================
 
 df_stream = (spark.readStream
     .format("cloudFiles")
     .option("cloudFiles.format", "binaryFile")
     .option("cloudFiles.includeExistingFiles", True)
-    .option("databricks.connection", "sharepoint_conn")
+    .option("databricks.connection", sharepoint_connector)
     .option("pathGlobFilter", "*.{pdf,pptx,docx}")
-    .load("https://TENANT.sharepoint.com/sites/SITE/Shared%20Documents"))
+    .load(sharepoint_site_url))
 
 # Write to a Delta table with checkpoint tracking
 (df_stream.writeStream
-    .option("checkpointLocation", "/Volumes/workshop/default/checkpoints/raw_docs")
+    .option("checkpointLocation", f"{personal_volume}/checkpoints/raw_docs")
     .trigger(availableNow=True)
-    .toTable("workshop.default.raw_documents"))
+    .toTable(f"{catalog}.{schema}.raw_documents"))
 
 # COMMAND ----------
 
@@ -249,7 +243,7 @@ df_stream = (spark.readStream
 # MAGIC - The checkpoint is updated after each successful run
 # MAGIC
 # MAGIC **Key points:**
-# MAGIC - The **checkpoint location** (`/Volumes/workshop/default/checkpoints/raw_docs`) is where Auto Loader stores its state
+# MAGIC - The **checkpoint location** (`/Volumes/{catalog}/{schema}/{volume}/checkpoints/raw_docs`) is where Auto Loader stores its state
 # MAGIC - If you delete the checkpoint, the next run becomes a full crawl again
 # MAGIC - You do **not** need to build custom tracking logic — Auto Loader handles it
 # MAGIC - This is exactly what your Lambda + DynamoDB tracker was doing, but with zero custom code
@@ -274,7 +268,7 @@ df_stream = (spark.readStream
 # MAGIC 2. Look for `TODO` comments where you need to fill in code
 # MAGIC 3. Compare your results with your neighbor
 # MAGIC
-# MAGIC **Data source:** `/Volumes/workshop/default/documents/` contains sample PDF, PPTX, and DOCX files.
+# MAGIC **Data source:** `/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/` contains sample PDF, PPTX, and DOCX files.
 
 # COMMAND ----------
 
@@ -291,7 +285,7 @@ df_stream = (spark.readStream
 
 df = (spark.read
     .format("binaryFile")
-    .load("/Volumes/workshop/default/documents/"))
+    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/"))
 
 display(df.select("path", "modificationTime", "length"))
 
