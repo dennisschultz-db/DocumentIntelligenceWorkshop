@@ -46,8 +46,6 @@
 # MAGIC
 # MAGIC All of that collapses into a few lines of Spark code.
 # MAGIC
-# MAGIC ![Lakeflow Connect for SharePoint](/Volumes/workshop/default/images/sharepoint_connector.png)
-# MAGIC
 # MAGIC ![Lakeflow Connect for SharePoint](./images/sharepoint_connector.png)
 # MAGIC
 # MAGIC > **Presenter note:** Walk through the architecture diagram. Emphasize that the Unity Catalog connection stores the OAuth credentials centrally — no more rotating secrets in Lambda environment variables. The connection is created once by an admin and referenced by name in all notebooks.
@@ -175,6 +173,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 14
 # MAGIC %md
 # MAGIC ### 6. Auto Loader Introduction
 # MAGIC
@@ -186,7 +185,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 # MAGIC
 # MAGIC All of that is handled automatically by Auto Loader's checkpoint mechanism.
 # MAGIC
-# MAGIC ![Lakeflow Connect Architecture](/Volumes/workshop/default/images/lakeflow_connect_unified.png)
+# MAGIC ![Lakeflow Connect Architecture](./images/lakeflow_connect_unified.png)
 # MAGIC
 # MAGIC **How it works:**
 # MAGIC

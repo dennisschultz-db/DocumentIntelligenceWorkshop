@@ -7,6 +7,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 2
 # MAGIC %md
 # MAGIC # Block 5 (Part 2): Assembling the Declarative Pipeline
 # MAGIC **Day 2 | 10:05 - 10:45 AM**
@@ -28,9 +29,9 @@
 # MAGIC - **Incremental processing** -- each run only processes new data, not the entire dataset
 # MAGIC - **Schema evolution** -- upstream schema changes are handled gracefully, not silently dropped
 # MAGIC
-# MAGIC ![Lakeflow Pipeline Architecture](/Volumes/workshop/default/images/managed_ingestion_arch.png)
+# MAGIC ![Lakeflow Pipeline Architecture](./images/managed_ingestion_arch.png)
 # MAGIC
-# MAGIC ![Bronze Tables Pipeline](/Volumes/workshop/default/images/bronze_tables_pipeline.png)
+# MAGIC ![Bronze Tables Pipeline](./images/bronze_tables_pipeline.png)
 # MAGIC
 # MAGIC > **Presenter note:** This is the climax of the workshop. Pause here and let the audience absorb the claim. Then say: "Let me prove it to you." Everything that follows is the proof. By the end of this section, they should be able to look at one Python file and trace the entire document processing pipeline from SharePoint ingestion through Elasticsearch output. Contrast this explicitly with the effort required to trace a document through their current system: Lambda trigger, SQS queue, parsing service, another SQS queue, enrichment service, another SQS queue, Elasticsearch writer -- any one of which can fail silently.
 

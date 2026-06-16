@@ -47,6 +47,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 2
 # MAGIC %md
 # MAGIC # Architecture Comparison: Current State vs. What We Will Build
 # MAGIC
@@ -84,12 +85,13 @@
 # MAGIC | 8+ microservices | Notebook functions within a single pipeline |
 # MAGIC | CloudWatch + X-Ray | Built-in pipeline monitoring + Databricks SQL dashboards |
 # MAGIC
-# MAGIC ![Databricks Data Intelligence Platform](/Volumes/workshop/default/images/platform_overview.png)
+# MAGIC ![Databricks Data Intelligence Platform](./images/platform_overview.png)
 # MAGIC
 # MAGIC > **Presenter note:** Spend time on this comparison. The goal is not to criticize their current architecture — it was built for good reasons — but to show how a platform approach collapses operational complexity. Ask participants which pain points resonate most with their day-to-day experience.
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 3
 # MAGIC %md
 # MAGIC # Workspace Tour
 # MAGIC
@@ -143,7 +145,7 @@
 # MAGIC - **Compute attachment**: A notebook must be attached to a compute resource (cluster) to run code. Check the top-right of this notebook to see which cluster you are connected to.
 # MAGIC - **Run cells** by pressing `Shift+Enter` or clicking the play button. Run all cells from the "Run" menu at the top.
 # MAGIC
-# MAGIC ![Databricks Platform Architecture](/Volumes/workshop/default/images/platform_aws_governance.png)
+# MAGIC ![Databricks Platform Architecture](./images/platform_aws_governance.png)
 # MAGIC
 # MAGIC > **Presenter note:** Do a live walkthrough of the workspace. Open Catalog Explorer and show the `workshop` catalog. Navigate into the `default` schema and show the Volumes. Have participants follow along and confirm they can see the same assets. If anyone cannot see the catalog, check their permissions before proceeding.
 
