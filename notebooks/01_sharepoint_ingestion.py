@@ -222,7 +222,7 @@ df_stream = (spark.readStream
 
 # Write to a Delta table with checkpoint tracking
 query = (df_stream.writeStream
-    .option("checkpointLocation", f"{personal_volume}/checkpoints/raw_docs")
+    .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{personal_volume}/checkpoints/raw_docs")
     .trigger(availableNow=True)
     .toTable(f"{catalog}.{schema}.raw_documents"))
 

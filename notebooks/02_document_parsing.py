@@ -38,6 +38,10 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_resources/Config
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ---
 # MAGIC # Guided Section: `ai_parse_document`
@@ -90,16 +94,18 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_parse_document(content, MAP('version', '2.0')) AS parsed
-# MAGIC FROM read_files(
-# MAGIC   '/Volumes/workshop/default/documents/',
-# MAGIC   format => 'binaryFile',
-# MAGIC   pathGlobFilter => '*.pdf'
-# MAGIC )
-# MAGIC LIMIT 1
+# DBTITLE 1,Parse a single pdf document
+display(spark.sql(f"""
+SELECT
+  path,
+  ai_parse_document(
+      content, 
+      MAP('version', '2.0')) AS parsed
+FROM read_files(
+    '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+    format => 'binaryFile')
+LIMIT 1
+"""))
 
 # COMMAND ----------
 
@@ -162,20 +168,25 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC WITH parsed AS (
-# MAGIC   SELECT
-# MAGIC     path,
-# MAGIC     ai_parse_document(content, MAP('version', '2.0')) AS doc
-# MAGIC   FROM read_files('/Volumes/workshop/default/documents/', format => 'binaryFile', pathGlobFilter => '*.pdf')
-# MAGIC   LIMIT 1
-# MAGIC )
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   doc:metadata AS metadata,
-# MAGIC   size(doc:pages) AS num_pages,
-# MAGIC   size(doc:elements) AS num_elements
-# MAGIC FROM parsed
+# DBTITLE 1,Extract metadata from single doc parse
+display(spark.sql(f"""
+    WITH parsed AS (
+    SELECT
+        path,
+        ai_parse_document(
+            content, 
+            MAP('version', '2.0')) AS doc
+    FROM read_files(
+        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+        format => 'binaryFile')
+    )
+    SELECT
+        path,
+        doc:metadata AS metadata,
+        size(doc:document:pages::ARRAY<VARIANT>) AS num_pages,
+        size(doc:document:elements::ARRAY<VARIANT>) AS num_elements
+        FROM parsed
+"""))
 
 # COMMAND ----------
 
@@ -193,20 +204,27 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC WITH parsed AS (
-# MAGIC   SELECT path, ai_parse_document(content, MAP('version', '2.0')) AS doc
-# MAGIC   FROM read_files('/Volumes/workshop/default/documents/', format => 'binaryFile', pathGlobFilter => '*.pdf')
-# MAGIC   LIMIT 1
-# MAGIC )
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   elem.type AS element_type,
-# MAGIC   elem.content AS content,
-# MAGIC   elem.confidence AS confidence
-# MAGIC FROM parsed
-# MAGIC LATERAL VIEW explode(doc:elements) AS elem
-# MAGIC WHERE elem.type IN ('text', 'title', 'section_header', 'table')
+# DBTITLE 1,Flatten text-type elements
+display(spark.sql(f"""
+    WITH parsed AS (
+    SELECT 
+        path, 
+        ai_parse_document(
+            content, 
+            MAP('version', '2.0')) AS doc
+    FROM read_files(
+        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+        format => 'binaryFile')
+    )
+    SELECT
+        path,
+        elem:type::STRING AS element_type,
+        elem:content::STRING AS content,
+        elem:confidence::DOUBLE AS confidence
+    FROM parsed
+        LATERAL VIEW explode(doc:document:elements::ARRAY<VARIANT>) AS elem
+    WHERE elem:type::STRING IN ('text', 'title', 'section_header', 'table')
+"""))
 
 # COMMAND ----------
 
@@ -226,19 +244,35 @@
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Parse a PPTX and output each slide as an image
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   ai_parse_document(
-# MAGIC     content,
-# MAGIC     MAP(
-# MAGIC       'version', '2.0',
-# MAGIC       'imageOutputPath', '/Volumes/workshop/default/slide_images/'
-# MAGIC     )
-# MAGIC   ) AS parsed
-# MAGIC FROM read_files('/Volumes/workshop/default/documents/', format => 'binaryFile', pathGlobFilter => '*.pptx')
-# MAGIC LIMIT 1
+# DBTITLE 1,Capture slide images and descriptions
+# Parse a PPTX and output each slide as an image
+display(spark.sql(f"""
+    WITH parsed AS (
+    SELECT 
+        path, 
+        ai_parse_document(
+            content,
+            MAP(
+            'version', '2.0',
+            'descriptionElementTypes', 'figure', # Include descriptions for figures
+            'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/')
+        ) as doc
+    FROM read_files(
+        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}', 
+        format => 'binaryFile', 
+        pathGlobFilter => '*SHORT*.pptx')
+    )
+    SELECT
+        path,
+        elem:type::STRING AS element_type,
+        (elem:bbox[0]:page_id::INT + 1)::INT AS slide_number,
+        (elem:bbox[0]:coord::ARRAY<INT>)::STRING AS coordinates,
+        elem:description::STRING AS description,
+        elem:confidence::DOUBLE AS confidence
+    FROM parsed
+        LATERAL VIEW explode(doc:document:elements::ARRAY<VARIANT>) AS elem
+    WHERE elem:type::STRING IN ('figure')
+"""))
 
 # COMMAND ----------
 
@@ -252,7 +286,7 @@
 # MAGIC - The `pages` array in the output includes `imageUri` fields pointing to each image
 # MAGIC - This works for **both** PowerPoint and PDF files
 # MAGIC
-# MAGIC **This directly answers the Bain requirement:**
+# MAGIC **This directly answers the requirement:**
 # MAGIC > "Each slide outputted as an image" + "all text pulled from the slide"
 # MAGIC
 # MAGIC With `ai_parse_document`, you get **text extraction AND image rendering** in one call. No separate
@@ -274,7 +308,7 @@
 # COMMAND ----------
 
 # List the generated slide images
-display(dbutils.fs.ls("/Volumes/workshop/default/slide_images/"))
+display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/"))
 
 # COMMAND ----------
 
@@ -290,19 +324,28 @@ display(dbutils.fs.ls("/Volumes/workshop/default/slide_images/"))
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC WITH parsed AS (
-# MAGIC   SELECT path, ai_parse_document(content, MAP('version', '2.0')) AS doc
-# MAGIC   FROM read_files('/Volumes/workshop/default/documents/', format => 'binaryFile')
-# MAGIC   LIMIT 3
-# MAGIC )
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   elem.type,
-# MAGIC   elem.content  -- Tables are returned as HTML
-# MAGIC FROM parsed
-# MAGIC LATERAL VIEW explode(doc:elements) AS elem
-# MAGIC WHERE elem.type = 'table'
+display(spark.sql(f"""
+    WITH parsed AS (
+        SELECT 
+            path, 
+            ai_parse_document(
+                content, 
+                MAP('version', '2.0')) AS doc
+        FROM read_files(
+            '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}', 
+            format => 'binaryFile',
+            pathGlobFilter => '*.pdf')
+        LIMIT 3
+    )
+    SELECT
+        path,
+        elem:type::STRING AS element_type,
+        elem:content::STRING as table_content -- Tables are returned as HTML
+    FROM parsed
+        LATERAL VIEW explode(doc:document:elements::ARRAY<VARIANT>) AS elem
+    WHERE elem:type::STRING = 'table'
+    """)
+)
 
 # COMMAND ----------
 
