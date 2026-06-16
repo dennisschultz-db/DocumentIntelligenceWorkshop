@@ -207,6 +207,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # COMMAND ----------
 
+# DBTITLE 1,Autoload files from SharePoint
 # ============================================================
 # Auto Loader: streaming read from SharePoint
 # ============================================================
@@ -220,10 +221,19 @@ df_stream = (spark.readStream
     .load(sharepoint_site_url))
 
 # Write to a Delta table with checkpoint tracking
-(df_stream.writeStream
+query = (df_stream.writeStream
     .option("checkpointLocation", f"{personal_volume}/checkpoints/raw_docs")
     .trigger(availableNow=True)
     .toTable(f"{catalog}.{schema}.raw_documents"))
+
+# COMMAND ----------
+
+# DBTITLE 1,Print Auto Loader file count
+# Wait for the streaming query to finish, then report how many files were processed
+query.awaitTermination()
+
+files_processed = query.lastProgress.sources[0].numInputRows if query.lastProgress else 0
+print(f"Files processed in this run: {files_processed}")
 
 # COMMAND ----------
 
