@@ -3,18 +3,19 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # ///
+# DBTITLE 1,Cell 1
 # MAGIC %md
 # MAGIC # Welcome to the Document Processing Workshop
 # MAGIC
 # MAGIC ## Workshop Objectives
 # MAGIC
-# MAGIC Over the next two days, we will **prove out Databricks as a replacement and augmentation** for your current AWS-based document processing system. By the end of this workshop, you will have a working pipeline that demonstrates how a single platform can replace a complex web of microservices, queues, and orchestration layers.
+# MAGIC Over the next two days, we will **explore how Databricks can consolidate and enhance** your document processing capabilities. By the end of this workshop, you will have a working pipeline that demonstrates how a unified platform approach can streamline operations and reduce operational overhead.
 # MAGIC
 # MAGIC **What you will walk away with:**
 # MAGIC - A working document processing pipeline built entirely on Databricks
 # MAGIC - Hands-on experience with Unity Catalog, Delta Lake, Auto Loader, and Lakeflow Declarative Pipelines
-# MAGIC - A clear understanding of how Databricks maps to (and simplifies) your current architecture
-# MAGIC - Concrete evidence to support a build-vs-migrate decision
+# MAGIC - A clear understanding of how Databricks capabilities map to your current architecture
+# MAGIC - Concrete evidence to inform your platform strategy going forward
 # MAGIC
 # MAGIC ## Two-Day Agenda Overview
 # MAGIC
@@ -49,11 +50,11 @@
 
 # DBTITLE 1,Cell 2
 # MAGIC %md
-# MAGIC # Architecture Comparison: Current State vs. What We Will Build
+# MAGIC # Architecture Comparison: Current State and the Databricks Approach
 # MAGIC
 # MAGIC ## Your Current System
 # MAGIC
-# MAGIC Your existing document processing architecture is a distributed system built on AWS with many moving parts:
+# MAGIC Your existing document processing architecture is a well-designed distributed system built on AWS. It has served the team well, handling complex document workflows at scale:
 # MAGIC
 # MAGIC | Component | Count | Role |
 # MAGIC |-----------|-------|------|
@@ -64,18 +65,18 @@
 # MAGIC | **Lambda Triggers** | Many | Event-driven glue between S3, SQS, and services |
 # MAGIC | **S3 Buckets** | Multiple | Staging areas between processing stages |
 # MAGIC
-# MAGIC **Pain points you have told us about:**
-# MAGIC - Debugging failures requires tracing through multiple queues and services
-# MAGIC - Adding a new processing step means creating a new service, queue, and Lambda trigger
-# MAGIC - State management across DynamoDB tables is fragile and hard to reason about
-# MAGIC - Reprocessing requires manually replaying messages through queues
-# MAGIC - Monitoring is scattered across CloudWatch, X-Ray, and custom dashboards
+# MAGIC **Opportunities that a platform approach can address:**
+# MAGIC - Simplify debugging with a single, unified view of the entire pipeline
+# MAGIC - Reduce the overhead of adding new processing steps
+# MAGIC - Consolidate state management into the storage layer itself
+# MAGIC - Make reprocessing straightforward with built-in time travel and checkpointing
+# MAGIC - Centralize monitoring in a single pane of glass
 # MAGIC
 # MAGIC ## What We Will Build Today
 # MAGIC
-# MAGIC A **single Databricks platform** with a **declarative pipeline** that replaces all of the above:
+# MAGIC A **single Databricks platform** with a **declarative pipeline** that consolidates these components:
 # MAGIC
-# MAGIC | Current AWS Component | Databricks Replacement |
+# MAGIC | Current AWS Component | Databricks Approach |
 # MAGIC |----------------------|----------------------|
 # MAGIC | S3 staging buckets | Unity Catalog Volumes + Delta tables |
 # MAGIC | SQS queues (13+) | Delta tables (each stage writes to a table; next stage reads) |
@@ -87,7 +88,7 @@
 # MAGIC
 # MAGIC ![Databricks Data Intelligence Platform](./images/platform_overview.png)
 # MAGIC
-# MAGIC > **Presenter note:** Spend time on this comparison. The goal is not to criticize their current architecture — it was built for good reasons — but to show how a platform approach collapses operational complexity. Ask participants which pain points resonate most with their day-to-day experience.
+# MAGIC > **Presenter note:** Spend time on this comparison. Acknowledge that their current architecture was built thoughtfully and has been effective. The goal is to show how a platform approach can reduce operational overhead by consolidating many components into fewer, more integrated ones. Ask participants which consolidation opportunities are most interesting to them.
 
 # COMMAND ----------
 
@@ -151,6 +152,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 4
 # MAGIC %md
 # MAGIC # Delta Lake: The Foundation of Everything
 # MAGIC
@@ -164,9 +166,7 @@
 # MAGIC Every write to a Delta table is **atomic, consistent, isolated, and durable**. This means:
 # MAGIC - No partial writes — a write either fully succeeds or fully fails
 # MAGIC - Concurrent readers and writers do not interfere with each other
-# MAGIC - No more corrupted data from failed jobs or concurrent access
-# MAGIC
-# MAGIC Compare this to writing raw files to S3, where a failed job can leave partial files that downstream consumers pick up, causing cascading errors.
+# MAGIC - Built-in protection against data corruption from failed jobs or concurrent access
 # MAGIC
 # MAGIC ### Time Travel
 # MAGIC Delta Lake automatically versions every change. You can:
@@ -174,27 +174,26 @@
 # MAGIC - Roll back to a previous version if something goes wrong (`RESTORE TABLE table TO VERSION AS OF 5`)
 # MAGIC - Audit every change made to a table (`DESCRIBE HISTORY table`)
 # MAGIC
-# MAGIC This replaces the need for DynamoDB state tables to track "what version of the document was processed." The history is built into the table itself.
+# MAGIC This means version tracking is built directly into the storage layer — no need for separate state management to track "what version of the document was processed."
 # MAGIC
 # MAGIC ### Schema Enforcement and Evolution
 # MAGIC Delta tables enforce a schema on write. If upstream data changes shape unexpectedly, the write **fails loudly** instead of silently corrupting your data. When you intentionally want to change the schema, Delta supports **schema evolution** — adding new columns without breaking existing queries.
 # MAGIC
-# MAGIC ## Why Delta Lake Replaces S3 + SQS
+# MAGIC ## How Delta Lake Unifies Storage, Signaling, and State
 # MAGIC
-# MAGIC In your current architecture, S3 buckets are "dumb storage" and SQS queues are the mechanism for signaling that new data is available. This creates several problems:
-# MAGIC - Queue messages can be lost, duplicated, or arrive out of order
-# MAGIC - You need separate state management to track what has been processed
-# MAGIC - Reprocessing means re-sending messages through queues
+# MAGIC One of the most powerful aspects of Delta Lake is that a single table serves multiple roles that traditionally require separate components:
 # MAGIC
-# MAGIC With Delta Lake:
-# MAGIC - **No message queues needed.** Each pipeline stage writes to a Delta table. The next stage reads from it using Auto Loader or streaming, which automatically detects new data.
-# MAGIC - **Built-in exactly-once semantics.** Delta's transaction log ensures no duplicates.
-# MAGIC - **Reprocessing is trivial.** Just rerun the pipeline — Delta tables are the source of truth, not ephemeral queue messages.
+# MAGIC - **Storage + signaling in one.** Each pipeline stage writes to a Delta table. The next stage reads from it using Auto Loader or streaming, which automatically detects new data — no separate messaging layer needed.
+# MAGIC - **Built-in exactly-once semantics.** Delta's transaction log ensures no duplicates without requiring external deduplication logic.
+# MAGIC - **Straightforward reprocessing.** Just rerun the pipeline — Delta tables are the durable source of truth with full history.
 # MAGIC
-# MAGIC > **Presenter note:** This is a key "aha moment" for the group. The idea that the table itself replaces both the storage AND the messaging layer is the fundamental shift. Draw the contrast clearly: in their current system, they have S3 (storage) + SQS (signaling) + DynamoDB (state). In Databricks, a Delta table does all three.
+# MAGIC This consolidation is one of the key benefits of the platform approach: fewer moving parts means fewer potential failure points and simpler operational management.
+# MAGIC
+# MAGIC > **Presenter note:** This is a key insight for the group. The idea that the table itself can serve as storage, signaling layer, and state tracker is a fundamental simplification. In a traditional architecture, these are three separate systems (object store, message queue, state database). With Delta Lake, they converge into one.
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 5
 # MAGIC %md
 # MAGIC # Medallion Architecture: Mapping to Your Document Pipeline
 # MAGIC
@@ -206,10 +205,10 @@
 # MAGIC
 # MAGIC **What it holds:** Raw documents exactly as they arrive from SharePoint — PDFs, Word docs, images, metadata. Nothing is transformed or parsed yet.
 # MAGIC
-# MAGIC **What it replaces in your current system:**
+# MAGIC **Databricks equivalent of:**
 # MAGIC - S3 staging bucket where raw documents land
-# MAGIC - The initial SQS queue that triggers processing
-# MAGIC - DynamoDB records tracking "document received" status
+# MAGIC - The initial queue that triggers processing
+# MAGIC - State records tracking "document received" status
 # MAGIC
 # MAGIC **Key properties:**
 # MAGIC - Append-only (raw data is never modified)
@@ -220,11 +219,11 @@
 # MAGIC
 # MAGIC **What it holds:** Extracted text, identified images, structured metadata, document sections. The raw bytes have been converted into queryable, structured data.
 # MAGIC
-# MAGIC **What it replaces in your current system:**
+# MAGIC **Databricks equivalent of:**
 # MAGIC - Parsing Service (PDF/Word text extraction)
 # MAGIC - Conversion Service (format normalization)
-# MAGIC - The SQS queues between ingestion and parsing
-# MAGIC - DynamoDB records tracking "document parsed" status
+# MAGIC - Queues between ingestion and parsing
+# MAGIC - State records tracking "document parsed" status
 # MAGIC
 # MAGIC **Key properties:**
 # MAGIC - Cleaned and deduplicated
@@ -235,12 +234,12 @@
 # MAGIC
 # MAGIC **What it holds:** LLM-generated summaries, document classifications, topic tags, embeddings, and any other enrichments that make the content ready for search and retrieval.
 # MAGIC
-# MAGIC **What it replaces in your current system:**
+# MAGIC **Databricks equivalent of:**
 # MAGIC - Enrichment Service (LLM summarization)
 # MAGIC - Tagging Service (classification and labeling)
 # MAGIC - Embedding Service (vector generation)
-# MAGIC - The SQS queues between parsing and enrichment
-# MAGIC - DynamoDB records tracking "document enriched" status
+# MAGIC - Queues between parsing and enrichment
+# MAGIC - State records tracking "document enriched" status
 # MAGIC
 # MAGIC **Key properties:**
 # MAGIC - Business-ready and consumption-optimized
@@ -262,20 +261,19 @@
 # MAGIC                               Elasticsearch (search & retrieval)
 # MAGIC ```
 # MAGIC
-# MAGIC Each arrow is a **Delta table read/write** — no queues, no triggers, no microservices.
+# MAGIC Each arrow is a **Delta table read/write** — the data flow is managed entirely through table operations.
 # MAGIC
-# MAGIC > **Presenter note:** Walk through the diagram and map each layer back to their existing services. Ask participants: "How many services does your current pipeline use between raw document and enriched output?" The answer is typically 5-6. With Medallion Architecture, it is three Delta tables and a single pipeline definition.
+# MAGIC > **Presenter note:** Walk through the diagram and map each layer to the corresponding components in their existing system. The goal is to show how the Medallion Architecture provides a clear, structured way to organize the same processing stages they already have, with fewer operational components to manage.
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 6
 # MAGIC %md
 # MAGIC # Auto Loader: Incremental File Processing
 # MAGIC
-# MAGIC ## The Problem It Solves
+# MAGIC ## What Auto Loader Brings to the Table
 # MAGIC
-# MAGIC In your current system, when a new document lands in S3, an EventBridge rule fires a Lambda function, which sends a message to an SQS queue, which triggers a downstream service. That is **three components** just to say "hey, there is a new file."
-# MAGIC
-# MAGIC **Auto Loader** replaces all of that with a single line of configuration.
+# MAGIC Detecting and processing new files as they arrive is a common need in any document pipeline. **Auto Loader** provides this capability as a built-in, fully managed feature — automatic incremental file detection with a single line of configuration.
 # MAGIC
 # MAGIC ## How It Works
 # MAGIC
@@ -294,25 +292,24 @@
 # MAGIC - **Scalable**: Handles millions of files efficiently using file notification mode
 # MAGIC - **Schema inference**: Automatically detects file schemas and evolves as needed
 # MAGIC
-# MAGIC ## Why This Matters for Your Use Case
+# MAGIC ## Benefits for Document Processing
 # MAGIC
-# MAGIC - **No more EventBridge rules** to set up and maintain
-# MAGIC - **No more Lambda triggers** that can fail silently or hit concurrency limits
-# MAGIC - **No more SQS dead-letter queues** for failed processing — Auto Loader retries automatically
-# MAGIC - **Built-in checkpointing** replaces the DynamoDB state tracking you maintain today
+# MAGIC - **Simplified event detection** — no need to configure separate event rules, triggers, or queues for new file arrival
+# MAGIC - **Built-in retry logic** — transient failures are handled automatically without dead-letter queue management
+# MAGIC - **Managed checkpointing** — state tracking for which files have been processed is handled by the framework
+# MAGIC - **Scales seamlessly** — handles everything from a handful of files to millions without configuration changes
 # MAGIC
-# MAGIC > **Presenter note:** Keep this section brief — it is a conceptual introduction. We will get hands-on with Auto Loader in Block 2. The key takeaway is: Auto Loader replaces the entire EventBridge + Lambda + SQS trigger chain with a single Spark configuration.
+# MAGIC > **Presenter note:** Keep this section brief — it is a conceptual introduction. We will get hands-on with Auto Loader in Block 2. The key takeaway is that Auto Loader consolidates file detection, event handling, and state tracking into a single managed capability.
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 7
 # MAGIC %md
 # MAGIC # Lakeflow Declarative Pipelines: Replacing Step Functions
 # MAGIC
-# MAGIC ## The Problem It Solves
+# MAGIC ## A Declarative Approach to Orchestration
 # MAGIC
-# MAGIC Your current orchestration uses **AWS Step Functions** to coordinate the flow between microservices. Each step in the state machine calls a service, checks for success or failure, handles retries, and routes to the next step. The Step Function JSON definitions are complex, hard to test, and tightly coupled to the AWS execution model.
-# MAGIC
-# MAGIC **Lakeflow Declarative Pipelines** (formerly Delta Live Tables / DLT) replaces all of this with a single Python file.
+# MAGIC Orchestrating multi-step data workflows is one of the more complex aspects of any pipeline. **Lakeflow Declarative Pipelines** offer a different paradigm: instead of defining explicit state transitions and routing logic, you **declare the desired outcome** and let the framework handle execution order, dependencies, and error handling.
 # MAGIC
 # MAGIC ## How It Works
 # MAGIC
@@ -343,14 +340,14 @@
 # MAGIC - **Built-in monitoring**: A visual pipeline graph shows the status of every table, data quality metrics, and processing throughput.
 # MAGIC - **Incremental by default**: Each run only processes new data, not the entire dataset.
 # MAGIC
-# MAGIC ## Why This Matters for Your Use Case
+# MAGIC ## Benefits for Document Processing
 # MAGIC
-# MAGIC - **One Python file** replaces Step Function JSON + Lambda glue code + SQS routing
-# MAGIC - **Adding a new processing step** means adding a new function — not deploying a new service, queue, and trigger
-# MAGIC - **Testing is simple** — it is just Python functions you can unit test
-# MAGIC - **Visibility is immediate** — the pipeline UI shows exactly where data is flowing and where problems occur
+# MAGIC - **Single Python file** defines the entire pipeline — easy to read, version, and review
+# MAGIC - **Adding a new processing step** means adding a new function — minimal overhead
+# MAGIC - **Testable** — standard Python functions that you can unit test with familiar tools
+# MAGIC - **Full visibility** — the pipeline UI shows exactly where data is flowing and where any issues occur
 # MAGIC
-# MAGIC > **Presenter note:** Again, keep this brief — we will build the full pipeline in Block 4. The key insight is the shift from **imperative orchestration** (Step Functions: "do this, then that, handle this error") to **declarative pipelines** (Lakeflow: "here are the tables I want and how they are derived"). This is a fundamental simplification.
+# MAGIC > **Presenter note:** Keep this brief — we will build the full pipeline in Block 4. The key insight is the shift from **imperative orchestration** (explicitly defining each step, transition, and error path) to **declarative pipelines** (declaring the desired tables and their derivations, letting the framework manage the rest).
 
 # COMMAND ----------
 
@@ -420,18 +417,19 @@ display(dbutils.fs.ls("/Volumes/workshop/default/documents/"))
 
 # COMMAND ----------
 
+# DBTITLE 1,Cell 18
 # MAGIC %md
 # MAGIC # Block 1 Complete
 # MAGIC
 # MAGIC ## What We Covered
 # MAGIC
 # MAGIC - **Workshop objectives** and the two-day agenda
-# MAGIC - **Architecture comparison**: your 13+ queues and 8+ microservices vs. a single Databricks pipeline
+# MAGIC - **Architecture overview**: how Databricks consolidates distributed components into a unified platform
 # MAGIC - **Workspace navigation**: Catalog Explorer, SQL Editor, Compute, and notebooks
 # MAGIC - **Delta Lake**: ACID transactions, time travel, and why it replaces S3 + SQS
 # MAGIC - **Medallion Architecture**: Bronze (raw) --> Silver (parsed) --> Gold (enriched)
-# MAGIC - **Auto Loader**: Incremental file processing that replaces EventBridge + Lambda triggers
-# MAGIC - **Lakeflow Declarative Pipelines**: Single Python file that replaces Step Functions orchestration
+# MAGIC - **Auto Loader**: Managed incremental file processing with built-in state tracking
+# MAGIC - **Lakeflow Declarative Pipelines**: Declarative pipeline definition in a single Python file
 # MAGIC - **Hands-on verification**: Confirmed our environment is working
 # MAGIC
 # MAGIC ## Up Next: Block 2 — Ingestion (10:00 - 12:00)
@@ -443,4 +441,4 @@ display(dbutils.fs.ls("/Volumes/workshop/default/documents/"))
 # MAGIC
 # MAGIC Take a short break and we will reconvene at 10:00.
 # MAGIC
-# MAGIC > **Presenter note:** Use the break to check in with participants individually. Ask if the architecture comparison resonated. Gauge the room's comfort level with notebooks and SQL — this will inform how much scaffolding to provide in Block 2.
+# MAGIC > **Presenter note:** Use the break to check in with participants individually. Ask which capabilities are most exciting to them and what questions they have. Gauge the room's comfort level with notebooks and SQL — this will inform how much scaffolding to provide in Block 2.
