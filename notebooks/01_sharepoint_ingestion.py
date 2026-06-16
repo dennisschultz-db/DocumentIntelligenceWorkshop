@@ -1,4 +1,9 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
+
 
 # COMMAND ----------
 
@@ -42,6 +47,8 @@
 # MAGIC All of that collapses into a few lines of Spark code.
 # MAGIC
 # MAGIC ![Lakeflow Connect for SharePoint](/Volumes/workshop/default/images/sharepoint_connector.png)
+# MAGIC
+# MAGIC ![Lakeflow Connect for SharePoint](./images/sharepoint_connector.png)
 # MAGIC
 # MAGIC > **Presenter note:** Walk through the architecture diagram. Emphasize that the Unity Catalog connection stores the OAuth credentials centrally — no more rotating secrets in Lambda environment variables. The connection is created once by an admin and referenced by name in all notebooks.
 

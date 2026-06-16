@@ -1,5 +1,8 @@
 # Databricks notebook source
-
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Day 2: LLM Enrichment with Databricks AI Functions
 # MAGIC
