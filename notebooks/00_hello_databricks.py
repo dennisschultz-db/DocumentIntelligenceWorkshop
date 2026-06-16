@@ -381,7 +381,7 @@ print("Hello, Databricks!")
 
 # COMMAND ----------
 
-# MAGIC %run ./_resources/Utilities
+# MAGIC %run ./_resources/Config
 
 # COMMAND ----------
 
