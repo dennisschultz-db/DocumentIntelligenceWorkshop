@@ -11,38 +11,35 @@
 - Serverless compute enabled (required for AI Functions)
 - Participant accounts created with workspace access
   - Entitlements granted via group
+  - Must have USE_CATALOG and CREATE_SCHEMA
 - Previews enabled
-  - Beta
-    - AI Prep Search
-    - AI Search: Quality Evaluation
-    - Custom LLM Serving for Databricks Model Serving
-    - Discover Page
-    - Lakeflow Connect for Sharepoint
-    - Supervisor API
-    - Third Party Connectors for Agents
-    - Upload Local PDFs to Genie Spaces
-    - Vector Search: Full-Text Search
-  - Public Preview
-    - AI Classify
-    - AI Extract
-    - AI Query for Custom Models and External Models
-    - AI Search Storage Optimized
-    - Agent Frameworks: On-Behalf-Of-User Authorization
-    - Enable Extended Models
-    - Enhanced Python UDFs in Unity Catalog
-    - External Tool Calling for Agents
-    - Genie - Upload File
-    - Genie Agent
-    - Genie Answer Inspection
-    - Lakeflow Designer
-    - Lakeflow Pipelines Editor
-    - Managed MCP Servers
-    - Synthetic Agent Evaluation
-    - Vector Search High QPS
+  - AI Prep Search
+  - AI Query for Custom Models and External Models
+  - AI Search: Full-Text Search
+  - AI Search: Quality Evaluation
+  - Agent Frameworks: On-Behalf-Of-User Authorization
+  - Custom LLM Serving for Databricks Model Serving
+  - Discover Page
+  - Enable Extended Models
+  - Enhanced Python UDFs in Unity Catalog
+  - External Tool Calling for Agents
+  - Genie - Upload File
+  - Genie Agent
+  - Genie Answer Inspection
+  - Lakeflow Connect for Sharepoint
+  - Managed MCP Servers
+  - Supervisor API
+  - Synthetic Agent Evaluation
+  - Third Party Connectors for Agents
+  - Upload Local PDFs to Genie Spaces
+  - Vector Search High QPS
 - Settings enabled
   - Advanced -> Choose entitlements when adding principals to workspaces
-- SharePoint OAuth connection pre-configured in Unity Catalog
+- SharePoint OAuth credentials
+  - Connection should be pre-configured in Unity Catalog
   - This will require a Principal for access, or one of the other access modes
+- Elasticsearch credentials
+  - Username/Password or API key available and stored in Databricks Secrets
 - DBR `16.4 LTS (includes Apache Spark 3.5.2, Scala 2.13)` cluster configured (classic cluster required for Elasticsearch Maven library installation)
   - For **Standard** access mode, you will need to whiteList the Maven coordinates used to load the library into the compute. This requires Metastore admin permissions.
   - For **Dedicated** access mode, you will need an Account-level group if more than one person is to have access.
