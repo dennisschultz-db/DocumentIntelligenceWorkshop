@@ -102,7 +102,7 @@ SELECT
       content, 
       MAP('version', '2.0')) AS parsed
 FROM read_files(
-    '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+    '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
     format => 'binaryFile')
 LIMIT 1
 """))
@@ -168,7 +168,7 @@ LIMIT 1
 
 # COMMAND ----------
 
-# DBTITLE 1,Extract metadata from single doc parse
+# DBTITLE 1,Extract metadata from single doc
 display(spark.sql(f"""
     WITH parsed AS (
     SELECT
@@ -177,7 +177,7 @@ display(spark.sql(f"""
             content, 
             MAP('version', '2.0')) AS doc
     FROM read_files(
-        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
         format => 'binaryFile')
     )
     SELECT
@@ -213,7 +213,7 @@ display(spark.sql(f"""
             content, 
             MAP('version', '2.0')) AS doc
     FROM read_files(
-        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/amazon_10-K-2024-As-Filed.pdf', 
+        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
         format => 'binaryFile')
     )
     SELECT
@@ -254,7 +254,7 @@ display(spark.sql(f"""
             content,
             MAP(
             'version', '2.0',
-            'descriptionElementTypes', 'figure', # Include descriptions for figures
+            'descriptionElementTypes', 'figure',
             'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/')
         ) as doc
     FROM read_files(
@@ -332,9 +332,8 @@ display(spark.sql(f"""
                 content, 
                 MAP('version', '2.0')) AS doc
         FROM read_files(
-            '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}', 
-            format => 'binaryFile',
-            pathGlobFilter => '*.pdf')
+            '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
+            format => 'binaryFile')
         LIMIT 3
     )
     SELECT
@@ -420,7 +419,8 @@ from pyspark.sql.functions import expr
 
 df = (spark.read
     .format("binaryFile")
-    .load("/Volumes/workshop/default/documents/"))
+    .option("recursiveFileLookup", "true")
+    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}"))
 
 df_parsed = df.withColumn(
     "parsed",
@@ -445,15 +445,16 @@ print("Parsed documents saved!")
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Exercise 2: Count elements by type across all documents
-# MAGIC SELECT
-# MAGIC   elem.type AS element_type,
-# MAGIC   COUNT(*) AS count
-# MAGIC FROM workshop.default.parsed_documents
-# MAGIC LATERAL VIEW explode(parsed:elements) AS elem
-# MAGIC GROUP BY elem.type
-# MAGIC ORDER BY count DESC
+#  Exercise 2: Count elements by type across all documents
+display(spark.sql(f"""
+    SELECT
+        elem:type::STRING AS element_type,
+        COUNT(*) AS count
+    FROM {catalog}.{schema}.parsed_documents
+    LATERAL VIEW explode(parsed:document:elements::ARRAY<VARIANT>) AS elem
+    GROUP BY elem:type::STRING
+    ORDER BY count DESC
+"""))
 
 # COMMAND ----------
 
@@ -463,21 +464,31 @@ print("Parsed documents saved!")
 # MAGIC Pick a document from the table and extract its readable content. This is the foundation for
 # MAGIC building a RAG pipeline -- you need clean, structured text to chunk and embed.
 # MAGIC
-# MAGIC **TODO:** Modify the `WHERE` clause to filter for a specific document path you are interested in.
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC -- Exercise 3: Extract all text from a specific document
-# MAGIC -- TODO: Change the path filter to a document you're interested in
-# MAGIC SELECT
-# MAGIC   path,
-# MAGIC   elem.type,
-# MAGIC   elem.content
-# MAGIC FROM workshop.default.parsed_documents
-# MAGIC LATERAL VIEW explode(parsed:elements) AS elem
-# MAGIC WHERE elem.type IN ('text', 'title', 'section_header')
-# MAGIC ORDER BY elem.type
+# DBTITLE 1,Extract all text from a specific document
+# Exercise 3: Extract all text from a specific document
+# ai_prep_search splits the parsed output into semantic chunks ready for RAG --
+# no manual element filtering or exploding needed.
+# TODO: Change the path filter to a document you're interested in
+display(spark.sql(f"""
+    WITH prepped AS (
+        SELECT
+            path,
+            ai_prep_search(parsed) AS result
+        FROM {catalog}.{schema}.parsed_documents
+        WHERE path LIKE '%amazon_10-K-2024-As-Filed.pdf'
+    )
+    SELECT
+        path,
+        chunk:chunk_position::INT       AS chunk_position,
+        chunk:chunk_to_retrieve::STRING AS text,
+        chunk:chunk_to_embed::STRING    AS text_with_context
+    FROM prepped
+    LATERAL VIEW explode(result:document:contents::ARRAY<VARIANT>) AS chunk
+    ORDER BY chunk_position
+"""))
 
 # COMMAND ----------
 
@@ -492,8 +503,6 @@ print("Parsed documents saved!")
 # MAGIC - The images will appear in the Volume path you specified
 # MAGIC - Each image corresponds to one slide
 # MAGIC
-# MAGIC > **Presenter Note:** If no PPTX files exist in the Volume, this will return an empty result.
-# MAGIC > Have a sample PPTX ready to upload if needed.
 
 # COMMAND ----------
 
@@ -502,19 +511,24 @@ from pyspark.sql.functions import expr
 
 df_pptx = (spark.read
     .format("binaryFile")
-    .load("/Volumes/workshop/default/documents/")
+    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}")
     .filter("path LIKE '%.pptx'")
     .limit(1))
 
 df_with_images = df_pptx.withColumn(
     "parsed",
-    expr("""ai_parse_document(content, MAP(
-        'version', '2.0',
-        'imageOutputPath', '/Volumes/workshop/default/slide_images/'
-    ))""")
+    expr(f"""
+        ai_parse_document(
+            content, 
+            MAP(
+                'version', '2.0',
+                'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images'
+            )
+        )
+    """)
 )
 df_with_images.collect()  # Trigger the parsing
-display(dbutils.fs.ls("/Volumes/workshop/default/slide_images/"))
+display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_images"))
 
 # COMMAND ----------
 
