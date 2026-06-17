@@ -70,7 +70,7 @@
 # MAGIC %md
 # MAGIC ### Step 1: Prepare Text Data from Parsed Documents
 # MAGIC
-# MAGIC Before we can enrich documents, we need to reassemble the parsed elements back into full-text documents. We'll concatenate all text-bearing elements (text, titles, section headers) per file.
+# MAGIC For some types of document enrichment, we will need to reassemble the parsed elements back into full-text documents. We'll concatenate all text-bearing elements (text, titles, section headers) per file.
 
 # COMMAND ----------
 
@@ -82,7 +82,7 @@ spark.sql(f"""
     path,
     concat_ws('\\n', collect_list(elem.content)) AS full_text
   FROM {catalog}.{schema}.parsed_documents
-  LATERAL VIEW explode(parsed:elements) AS elem
+    LATERAL VIEW explode(cast(parsed:document:elements AS ARRAY<STRUCT<type: STRING, content: STRING>>)) AS elem
   WHERE elem.type IN ('text', 'title', 'section_header')
   GROUP BY path
 """)
@@ -175,7 +175,6 @@ display(spark.sql(f"""
           'enableConfidenceScores', 'true')
     ) AS extracted
   FROM {catalog}.{schema}.parsed_documents
-  LIMIT 3
 """))
 
 # COMMAND ----------
@@ -192,6 +191,12 @@ display(spark.sql(f"""
 # DBTITLE 1,Extract metadata
 # Use ai_query with structured output for complex metadata extraction
 llm_model = "databricks-meta-llama-3-3-70b-instruct"
+
+# Spark SQL struct type passed to responseFormat -- constrains the LLM to return this schema.
+# Fields align with what Exercise 5 (enriched_documents) expects: title, key_topics, sentiment.
+# responseFormat requires a single top-level wrapper field; ai_query unwraps it and returns
+# the inner struct directly -- so m.metadata.title / .key_topics / .sentiment work in cell 35.
+response_format = "STRUCT<result: STRUCT<title: STRING, author: STRING, date: STRING, key_topics: ARRAY<STRING>, summary: STRING, sentiment: STRING>>"
 
 display(spark.sql(f"""
   SELECT
@@ -237,15 +242,10 @@ display(spark.sql(f"""
       files => content
     ) AS image_analysis
   FROM read_files(
-    f'/Volumes/{catalog}/{schema}/{personal_volume}/slide_images', 
+    '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images', 
     format => 'binaryFile')
   LIMIT 3
 """))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC > **Presenter note**: If no slide images are available from the parsing step, this cell will return an empty result or error. That's expected -- participants will generate slide images during the pipeline assembly block. You can also upload a sample image to the volume to demonstrate.
 
 # COMMAND ----------
 
@@ -324,8 +324,8 @@ spark.sql(f"""
 display(spark.sql(f"""
   SELECT
     path,
-    {catalog}.{schema}.classify_document(left(full_text, {max_classify_chars})) AS category,
-    {catalog}.{schema}.summarize_document(left(full_text, {max_summary_chars})) AS summary
+    {catalog}.{schema}.classify_document(left(full_text, 3000)) AS category,
+    {catalog}.{schema}.summarize_document(left(full_text, 4000)) AS summary
   FROM {catalog}.{schema}.document_text
   LIMIT 3
 """))
@@ -485,9 +485,9 @@ spark.sql(f"""
     s.summary,
     c.category,
     m.metadata,
-    m.metadata.title AS title,
-    m.metadata.key_topics AS key_topics,
-    m.metadata.sentiment AS sentiment,
+    m.metadata:title::STRING AS title,
+    m.metadata:key_topics::ARRAY<STRING> AS key_topics,
+    m.metadata:sentiment::STRING AS sentiment,
     current_timestamp() AS enriched_at
   FROM {catalog}.{schema}.document_text t
   LEFT JOIN {catalog}.{schema}.document_summaries s ON t.path = s.path
