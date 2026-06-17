@@ -397,7 +397,9 @@ spark.sql(f"""
 
 # DBTITLE 1,Custom category classification
 # TODO: Exercise 2 - Classify documents into custom categories
-# Replace custom_categories variable (defined above) with ones relevant to YOUR documents
+# Replace custom_categories variable with ones relevant to YOUR documents
+custom_categories = '["strategy", "operations", "finance", "technology", "hr", "legal", "marketing", "other"]'
+
 spark.sql(f"""
   CREATE OR REPLACE TABLE {catalog}.{schema}.document_categories AS
   SELECT
@@ -421,14 +423,16 @@ spark.sql(f"""
 
 # DBTITLE 1,Extract in custom format
 # TODO: Exercise 3 - Extract structured metadata from documents
-# Customize response_format variable (defined above) to match your needs
+# Customize response_format variable to match your needs
+response_format = "STRUCT<result: STRUCT<title: STRING, author: STRING, date: STRING, key_topics: ARRAY<STRING>, summary: STRING, sentiment: STRING>>"
+
 spark.sql(f"""
   CREATE OR REPLACE TABLE {catalog}.{schema}.document_metadata AS
   SELECT
     path,
     ai_query(
       '{llm_model}',
-      'Extract structured metadata from this document:\\n\\n' || left(full_text, {max_summary_chars}),
+      'Extract structured metadata from this document:\\n\\n' || left(full_text, 4000),
       responseFormat => '{response_format}',
       failOnError => false
     ) AS metadata
@@ -448,22 +452,21 @@ spark.sql(f"""
 # TODO (Stretch): Exercise 4 - Analyze slide images with a multimodal model
 # This requires slide images to be available in the volume from the parsing step
 # Customize the prompt to extract what's most useful for your use case
-
+slide_images_path = f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_images"
 slide_prompt = "Analyze this slide image. Extract all visible text, describe any charts or diagrams, and summarize the key message of the slide."
 
-# Uncomment to run:
-# spark.sql(f"""
-#   CREATE OR REPLACE TABLE {catalog}.{schema}.slide_analysis AS
-#   SELECT
-#     path,
-#     ai_query(
-#       '{vision_model}',
-#       '{slide_prompt}',
-#       files => content,
-#       failOnError => false
-#     ) AS slide_description
-#   FROM read_files('{slide_images_path}', format => 'binaryFile')
-# """)
+spark.sql(f"""
+  CREATE OR REPLACE TABLE {catalog}.{schema}.slide_analysis AS
+  SELECT
+    path,
+    ai_query(
+      '{vision_model}',
+      '{slide_prompt}',
+      files => content,
+      failOnError => false
+    ) AS slide_description
+  FROM read_files('{slide_images_path}', format => 'binaryFile')
+""")
 
 # COMMAND ----------
 
@@ -484,10 +487,11 @@ spark.sql(f"""
     t.full_text,
     s.summary,
     c.category,
-    m.metadata,
-    m.metadata:title::STRING AS title,
-    m.metadata:key_topics::ARRAY<STRING> AS key_topics,
-    m.metadata:sentiment::STRING AS sentiment,
+    m.metadata.result:author::STRING AS author,
+    m.metadata.result:date::STRING AS date,
+    m.metadata.result:title::STRING AS title,
+    from_json(m.metadata.result:key_topics, 'ARRAY<STRING>') AS key_topics,
+    m.metadata.result:sentiment::STRING AS sentiment,
     current_timestamp() AS enriched_at
   FROM {catalog}.{schema}.document_text t
   LEFT JOIN {catalog}.{schema}.document_summaries s ON t.path = s.path
