@@ -2,6 +2,9 @@
 # /// script
 # [tool.databricks.environment]
 # environment_version = "5"
+# dependencies = [
+#   "elasticsearch",
+# ]
 # ///
 # MAGIC %md
 # MAGIC # Writing Enriched Data to Elasticsearch
@@ -23,8 +26,109 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_resources/Config
+
+# COMMAND ----------
+
 # MAGIC %md
-# MAGIC ## Approach 1 -- es-hadoop Spark Connector
+# MAGIC ## Secrets
+# MAGIC Store sensitive information in Databricks secrets.  
+# MAGIC 1. Set from commandline or API only.
+# MAGIC 1. ACLs are set on secrets to restrict their visibility to only those who need them.
+# MAGIC 3. Secrets can be retrieved in Python code.  
+# MAGIC
+# MAGIC
+# MAGIC To set secrets:
+# MAGIC - `databricks secrets create-scope <secret-scope>`
+# MAGIC - `databricks secrets put-secret <secret-scope> <secret-name>` (you will be prompted to enter the value on the command-line)
+# MAGIC
+# MAGIC To set ACLs on secret scopes:
+# MAGIC - `databricks secrets put-acl <secret-scope> <principal> <permission>`
+# MAGIC
+# MAGIC To retrieve secret values:
+# MAGIC - `secretvalue = dbutils.secrets.get(<secret-scope>, <secret-name>)`
+# MAGIC
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+# DBTITLE 1,Retrieve secrets
+# Read secrets
+username = dbutils.secrets.get("elasticsearch", "username")
+password = dbutils.secrets.get("elasticsearch", "password")
+serverless_api_key = dbutils.secrets.get("elasticsearch", "serverless_api_key")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Data to be written
+
+# COMMAND ----------
+
+# DBTITLE 1,Retrieve data to be written to Elasticsearch
+df_enriched = spark.table(f"{catalog}.{schema}.enriched_documents")
+display(df_enriched)
+
+# COMMAND ----------
+
+# DBTITLE 1,Format data and actions
+# Bulk write from DataFrame
+import json
+
+rows = json.loads(df_enriched.toPandas().to_json(orient="records"))
+actions = [
+    {
+        "_index": elasticsearch_index,
+        "_source": row
+    } for row in rows
+]
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Approach 1 -- Python `elasticsearch` Client
+# MAGIC
+# MAGIC The official Python Elasticsearch client is a better fit when you need:
+# MAGIC
+# MAGIC - **Lower-volume writes** where Spark parallelism isn't necessary
+# MAGIC - **Fine-grained control** over document structure, routing, or custom pipelines
+# MAGIC - **Index management operations** (create/delete indices, update mappings, etc.)
+# MAGIC
+# MAGIC The trade-off is that all work happens on the driver node, so it won't scale as well for very large datasets.
+# MAGIC
+# MAGIC > **Presenter note:** Point out the trade-off -- the Spark connector distributes writes across executors, while the Python client runs entirely on the driver. For our document volumes (thousands, not millions), both approaches work fine.
+
+# COMMAND ----------
+
+# MAGIC %pip install elasticsearch
+
+# COMMAND ----------
+
+# DBTITLE 1,Write to Elasticsearch
+from elasticsearch import Elasticsearch, helpers
+
+# Connect to Elasticsearch
+es = Elasticsearch(
+    f"https://{elasticsearch_host}:{elasticsearch_port}",
+    # basic_auth=(
+    #     username,
+    #     password
+    # ),
+    api_key=serverless_api_key,
+    verify_certs=True
+)
+
+# Verify connection
+print(es.info())
+
+success, errors = helpers.bulk(es, actions)
+print(f"Indexed {success} documents, {len(errors)} errors")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Approach 2 -- es-hadoop Spark Connector
 # MAGIC
 # MAGIC The es-hadoop connector is the best choice for large-scale batch writes and streaming pipelines:
 # MAGIC
@@ -33,38 +137,37 @@
 # MAGIC - Supports **document-level upserts** via `es.mapping.id` -- if a document with the same ID already exists, it gets updated rather than duplicated
 # MAGIC - Works with both batch and structured streaming via `foreachBatch`
 # MAGIC
+# MAGIC **_Note_** - Installing Maven libraries is not supported on Databricks Serverless compute.  To use this approach, you must use a Classic compute cluster.
+# MAGIC
+# MAGIC
 # MAGIC > **Presenter note:** Emphasize that the es-hadoop connector treats ES as just another Spark data sink. Students already know `.write.format(...)` from writing to Delta -- same pattern, different format string.
 
 # COMMAND ----------
 
-# Load our enriched documents
-df_enriched = spark.table("workshop.default.enriched_documents")
-display(df_enriched)
-
-# COMMAND ----------
-
-# Configuration
-ES_HOST = "https://YOUR-ES-ENDPOINT.com"
-ES_PORT = "443"
-ES_INDEX = "documents"
-
+# DBTITLE 1,Write to Elasticsearch
 # Write to Elasticsearch
+from pyspark.sql.functions import col, md5, get_json_object
+
+# The Maven driver does not support a variant data type.  Convert it to a string.
 (df_enriched
+    .withColumn("category", get_json_object(col("category").cast("string"), "$.response[0]"))
+    .withColumn("doc_id", md5(col("path")))
     .write
     .format("org.elasticsearch.spark.sql")
-    .option("es.nodes", ES_HOST)
-    .option("es.port", ES_PORT)
+    .option("es.nodes", elasticsearch_host)
+    .option("es.port", elasticsearch_port)
     .option("es.net.ssl", "true")
-    .option("es.net.http.auth.user", dbutils.secrets.get("es-scope", "es-user"))
-    .option("es.net.http.auth.pass", dbutils.secrets.get("es-scope", "es-password"))
+    # .option("es.net.http.auth.user", elasticsearch_username)
+    # .option("es.net.http.auth.pass", elasticsearch_password)
+    .option("es.net.http.header.Authorization", f"ApiKey {serverless_api_key}")
     .option("es.nodes.wan.only", "true")
     .option("es.nodes.discovery", "false")
     .option("es.index.auto.create", "true")
     .option("es.mapping.id", "doc_id")
-    .mode("append")
-    .save(ES_INDEX))
+    .mode("overwrite")
+    .save(elasticsearch_index))
 
-print(f"Written {df_enriched.count()} documents to Elasticsearch index '{ES_INDEX}'")
+print(f"Written {df_enriched.count()} documents to Elasticsearch index '{elasticsearch_index}'")
 
 # COMMAND ----------
 
@@ -91,83 +194,38 @@ print(f"Written {df_enriched.count()} documents to Elasticsearch index '{ES_INDE
 
 # COMMAND ----------
 
+# DBTITLE 1,forEachBatch pattern
 def write_to_elasticsearch(batch_df, batch_id):
     """Write a micro-batch to Elasticsearch"""
     (batch_df
+        .withColumn("category", get_json_object(col("category").cast("string"), "$.response[0]"))
+        .withColumn("doc_id", md5(col("path")))
         .write
         .format("org.elasticsearch.spark.sql")
-        .option("es.nodes", ES_HOST)
-        .option("es.port", ES_PORT)
+        .option("es.nodes", elasticsearch_host)
+        .option("es.port", elasticsearch_port)
         .option("es.net.ssl", "true")
-        .option("es.net.http.auth.user", dbutils.secrets.get("es-scope", "es-user"))
-        .option("es.net.http.auth.pass", dbutils.secrets.get("es-scope", "es-password"))
+        # .option("es.net.http.auth.user", elasticsearch_username)
+        # .option("es.net.http.auth.pass", elasticsearch_password)
+        .option("es.net.http.header.Authorization", f"ApiKey {serverless_api_key}")
         .option("es.nodes.wan.only", "true")
         .option("es.nodes.discovery", "false")
         .option("es.index.auto.create", "true")
         .option("es.mapping.id", "doc_id")
         .mode("append")
-        .save(ES_INDEX))
+        .save(elasticsearch_index))
     print(f"Batch {batch_id}: wrote {batch_df.count()} documents")
 
 # Streaming write
 query = (spark.readStream
-    .table("workshop.default.enriched_documents")
+    .table(f"{catalog}.{schema}.enriched_documents")
     .writeStream
     .foreachBatch(write_to_elasticsearch)
-    .option("checkpointLocation", "/Volumes/workshop/default/checkpoints/es_sink")
+    .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{personal_volume}/checkpoints/es_sink")
     .trigger(availableNow=True)
     .start())
 
 query.awaitTermination()
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Approach 2 -- Python `elasticsearch` Client
-# MAGIC
-# MAGIC The official Python Elasticsearch client is a better fit when you need:
-# MAGIC
-# MAGIC - **Lower-volume writes** where Spark parallelism isn't necessary
-# MAGIC - **Fine-grained control** over document structure, routing, or custom pipelines
-# MAGIC - **Index management operations** (create/delete indices, update mappings, etc.)
-# MAGIC
-# MAGIC The trade-off is that all work happens on the driver node, so it won't scale as well for very large datasets.
-# MAGIC
-# MAGIC > **Presenter note:** Point out the trade-off -- the Spark connector distributes writes across executors, while the Python client runs entirely on the driver. For our document volumes (thousands, not millions), both approaches work fine.
-
-# COMMAND ----------
-
-# MAGIC %pip install elasticsearch
-
-# COMMAND ----------
-
-from elasticsearch import Elasticsearch, helpers
-
-# Connect to Elasticsearch
-es = Elasticsearch(
-    ES_HOST,
-    basic_auth=(
-        dbutils.secrets.get("es-scope", "es-user"),
-        dbutils.secrets.get("es-scope", "es-password")
-    )
-)
-
-# Verify connection
-print(es.info())
-
-# Bulk write from DataFrame
-rows = df_enriched.collect()
-actions = [
-    {
-        "_index": ES_INDEX,
-        "_id": row["doc_id"],
-        "_source": {k: v for k, v in row.asDict().items() if k != "doc_id"}
-    }
-    for row in rows
-]
-
-success, errors = helpers.bulk(es, actions)
-print(f"Indexed {success} documents, {len(errors)} errors")
 
 # COMMAND ----------
 
