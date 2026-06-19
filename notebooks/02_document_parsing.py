@@ -363,80 +363,6 @@ display(spark.sql("""
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 7: What about Large Documents?
-# MAGIC `ai_parse_document` has some [limitations](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_parse_document#limitations) that you need to be aware of.  The most significant is that documents are limited to a maximum of 500 pages and 100 MB. The solution is to use the `pageRange` argument to parse the document in chunks.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Step 7: Parse All Documents and Save to a Delta Table
-# MAGIC
-# MAGIC Parse all documents in the Bronze and persist the results
-# MAGIC as a Silver table. This is the pattern you would use in a production pipeline.
-# MAGIC
-# MAGIC **What is happening here:**
-# MAGIC 1. `spark.read.table(...)` reads the Bronze table into a Dataframe
-# MAGIC 2. `expr("ai_parse_document(...)")` calls the SQL function from PySpark
-# MAGIC 3. `.saveAsTable(...)` persists the results as a managed Delta table in Unity Catalog
-# MAGIC
-
-# COMMAND ----------
-
-# DBTITLE 1,Parse all documents and save to a Delta table
-from pyspark.sql.functions import expr
-
-df = (spark.read.table ("01_bronze_raw_documents"))
-
-df_parsed = df.withColumn(
-    "parsed",
-    expr(f"""
-        ai_parse_document(
-            content, 
-            MAP('version', '2.0',
-            'descriptionElementTypes', 'figure',
-            'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/')
-        )
-    """)
-)
-
-df_parsed.write.mode("overwrite").saveAsTable("02_silver_parsed_documents")
-print("Parsed documents saved!")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## Step 8: Extract All Text from a Specific Document
-# MAGIC
-# MAGIC Take the parsed content of a document from the table and **chunk it for embedding** **_with_** additional context. This is the foundation for building a RAG pipeline -- you need clean, structured text to chunk and embed, but including context such as headers into each chunk will improve accuracy.
-# MAGIC  
-
-# COMMAND ----------
-
-# DBTITLE 1,Extract embedding text from a specific document
-# ai_prep_search splits the parsed output into semantic chunks ready for RAG --
-# no manual element filtering or exploding needed.
-
-display(spark.sql("""
-    WITH prepped AS (
-        SELECT
-            fileName,
-            ai_prep_search(parsed) AS result
-        FROM 02_silver_parsed_documents
-        WHERE path LIKE '%amazon_10-K-2024-As-Filed.pdf'
-    )
-    SELECT
-        fileName,
-        chunk:chunk_position::INT       AS chunk_position,
-        chunk:chunk_to_retrieve::STRING AS text,
-        chunk:chunk_to_embed::STRING    AS text_with_context
-    FROM prepped
-    LATERAL VIEW explode(result:document:contents::ARRAY<VARIANT>) AS chunk
-    ORDER BY chunk_position
-"""))
-
-# COMMAND ----------
-
-# MAGIC %md
 # MAGIC ---
 # MAGIC ## Recap: What We Covered
 # MAGIC
@@ -448,20 +374,8 @@ display(spark.sql("""
 # MAGIC 4. The **`imageOutputPath`** parameter renders slides/pages as PNG images
 # MAGIC 4. The **descriptionElementsTypes** provides an AI generated description for any figures and images in the document
 # MAGIC 5. The same function works from **SQL and PySpark** via `expr()`
-# MAGIC 6. Results persist naturally in **Delta tables** for reuse across the pipeline
 # MAGIC
-# MAGIC ### Architecture Impact
-# MAGIC
-# MAGIC ```
-# MAGIC BEFORE (Current State):
-# MAGIC   S3 Upload -> Lambda -> Step Functions -> Parsing Service -> Conversion Service -> S3
-# MAGIC   (6 components, multiple failure points, custom error handling)
-# MAGIC
-# MAGIC AFTER (Databricks):
-# MAGIC   SharePoint -> Bronze -> ai_parse_document() -> Silver Table
-# MAGIC   (1 function call, automatic retries, governed by Unity Catalog)
-# MAGIC ```
 # MAGIC
 # MAGIC ### What's Next
 # MAGIC
-# MAGIC In Day 2, we will use the slide images with multimodal LLMs.
+# MAGIC `ai_parse_document()` has limitations.  We will explore those in the next module.
