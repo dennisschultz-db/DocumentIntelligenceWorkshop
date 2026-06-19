@@ -3,10 +3,6 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # ///
-
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Block 3: Document Parsing with `ai_parse_document`
 # MAGIC **Day 1 | 11:00 - 11:55**
@@ -95,42 +91,42 @@
 # COMMAND ----------
 
 # DBTITLE 1,Parse a single pdf document
-display(spark.sql(f"""
+display(spark.sql("""
 SELECT
-  path,
+  fileName,
   ai_parse_document(
       content, 
       MAP('version', '2.0')) AS parsed
-FROM read_files(
-    '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
-    format => 'binaryFile')
-LIMIT 1
+FROM 01_bronze_raw_documents
+WHERE fileName = "sample_report_fy2026.pdf"
 """))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Understanding the Output Structure
+# MAGIC ### Understanding the Output Structure
 # MAGIC
 # MAGIC The `ai_parse_document` function returns a **VARIANT** (semi-structured JSON) with this schema:
 # MAGIC
 # MAGIC ```json
 # MAGIC {
-# MAGIC   "pages": [
-# MAGIC     {
-# MAGIC       "pageId": 0,
-# MAGIC       "imageUri": "dbfs:/..."   // Only if imageOutputPath is set
-# MAGIC     }
-# MAGIC   ],
-# MAGIC   "elements": [
-# MAGIC     {
-# MAGIC       "type": "text",           // Element classification
-# MAGIC       "content": "...",          // The actual extracted content
-# MAGIC       "confidence": 0.97,       // Model confidence (0.0 - 1.0)
-# MAGIC       "bbox": { ... },          // Bounding box on the page
-# MAGIC       "pageId": 0               // Which page this element is on
-# MAGIC     }
-# MAGIC   ],
+# MAGIC   "document": {
+# MAGIC     "elements": [
+# MAGIC       {
+# MAGIC         "type": "text",           // Element classification
+# MAGIC         "content": "...",          // The actual extracted content
+# MAGIC         "confidence": 0.97,       // Model confidence (0.0 - 1.0)
+# MAGIC         "bbox": { ... },          // Bounding box on the page
+# MAGIC         "pageId": 0               // Which page this element is on
+# MAGIC       }
+# MAGIC     ],
+# MAGIC     "pages": [
+# MAGIC       {
+# MAGIC         "pageId": 0,
+# MAGIC         "imageUri": "dbfs:/..."   // Only if imageOutputPath is set
+# MAGIC       }
+# MAGIC     ]
+# MAGIC   }
 # MAGIC   "error_status": null,          // Any processing errors
 # MAGIC   "metadata": {
 # MAGIC     "fileName": "...",
@@ -161,27 +157,24 @@ LIMIT 1
 # MAGIC %md
 # MAGIC ## Step 2: Explore the Parsed Output Structure
 # MAGIC
-# MAGIC Let's use VARIANT path notation (the `:` syntax) to pull out specific parts of the parsed output.
+# MAGIC Use VARIANT path notation (the `:` syntax) to pull out specific parts of the parsed output.
 # MAGIC
-# MAGIC > **Presenter Note:** Show how `doc:metadata`, `doc:pages`, `doc:elements` use the colon path
-# MAGIC > syntax to navigate into the VARIANT structure. This is native Databricks SQL -- no UDFs needed.
 
 # COMMAND ----------
 
 # DBTITLE 1,Extract metadata from single doc
-display(spark.sql(f"""
+display(spark.sql("""
     WITH parsed AS (
     SELECT
-        path,
+        fileName,
         ai_parse_document(
             content, 
             MAP('version', '2.0')) AS doc
-    FROM read_files(
-        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
-        format => 'binaryFile')
+    FROM 01_bronze_raw_documents
+    WHERE fileName = "sample_report_fy2026.pdf"
     )
     SELECT
-        path,
+        fileName,
         doc:metadata AS metadata,
         size(doc:document:pages::ARRAY<VARIANT>) AS num_pages,
         size(doc:document:elements::ARRAY<VARIANT>) AS num_elements
@@ -205,19 +198,18 @@ display(spark.sql(f"""
 # COMMAND ----------
 
 # DBTITLE 1,Flatten text-type elements
-display(spark.sql(f"""
+display(spark.sql("""
     WITH parsed AS (
     SELECT 
-        path, 
+        fileName, 
         ai_parse_document(
             content, 
             MAP('version', '2.0')) AS doc
-    FROM read_files(
-        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
-        format => 'binaryFile')
+    FROM 01_bronze_raw_documents
+    WHERE fileName = "sample_report_fy2026.pdf"
     )
     SELECT
-        path,
+        fileName,
         elem:type::STRING AS element_type,
         elem:content::STRING AS content,
         elem:confidence::DOUBLE AS confidence
@@ -239,8 +231,6 @@ display(spark.sql(f"""
 # MAGIC
 # MAGIC You get **both** in a single function call.
 # MAGIC
-# MAGIC > **Presenter Note:** This is a great moment to pause and let the audience react. Their current
-# MAGIC > pipeline uses a dedicated Conversion Service to render slides as images. Here it is a single parameter.
 
 # COMMAND ----------
 
@@ -249,7 +239,7 @@ display(spark.sql(f"""
 display(spark.sql(f"""
     WITH parsed AS (
     SELECT 
-        path, 
+        fileName, 
         ai_parse_document(
             content,
             MAP(
@@ -257,13 +247,11 @@ display(spark.sql(f"""
             'descriptionElementTypes', 'figure',
             'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/')
         ) as doc
-    FROM read_files(
-        '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}', 
-        format => 'binaryFile', 
-        pathGlobFilter => '*SHORT*.pptx')
+    FROM 01_bronze_raw_documents
+    WHERE fileName = "DatabricksSHORTOverviewDeck.pptx"
     )
     SELECT
-        path,
+        fileName,
         elem:type::STRING AS element_type,
         (elem:bbox[0]:page_id::INT + 1)::INT AS slide_number,
         (elem:bbox[0]:coord::ARRAY<INT>)::STRING AS coordinates,
@@ -303,10 +291,11 @@ display(spark.sql(f"""
 # MAGIC %md
 # MAGIC ## Step 5: View the Generated Slide Images
 # MAGIC
-# MAGIC Let's confirm the images were created by listing the output Volume.
+# MAGIC Confirm the images were created by listing the output Volume.
 
 # COMMAND ----------
 
+# DBTITLE 1,List slide images folder
 # List the generated slide images
 display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/"))
 
@@ -324,20 +313,19 @@ display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_imag
 
 # COMMAND ----------
 
-display(spark.sql(f"""
+# DBTITLE 1,Extract Tables
+display(spark.sql("""
     WITH parsed AS (
         SELECT 
-            path, 
+            fileName, 
             ai_parse_document(
                 content, 
                 MAP('version', '2.0')) AS doc
-        FROM read_files(
-            '/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/sample_report_fy2026.pdf', 
-            format => 'binaryFile')
-        LIMIT 3
+        FROM 01_bronze_raw_documents
+        WHERE fileName = "sample_report_fy2026.pdf"
     )
     SELECT
-        path,
+        fileName,
         elem:type::STRING AS element_type,
         elem:content::STRING as table_content -- Tables are returned as HTML
     FROM parsed
@@ -375,113 +363,69 @@ display(spark.sql(f"""
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ---
-# MAGIC # Hands-on Exercise: Parse and Explore Documents
-# MAGIC ---
-# MAGIC
-# MAGIC **Time: 30 minutes**
-# MAGIC
-# MAGIC Now it is your turn. Work through the exercises below to build familiarity with `ai_parse_document`.
-# MAGIC
-# MAGIC | Exercise | Goal |
-# MAGIC |---|---|
-# MAGIC | 1 | Parse all documents and save to a Delta table |
-# MAGIC | 2 | Count elements by type across all documents |
-# MAGIC | 3 | Extract all text from a specific document |
-# MAGIC | 4 (Stretch) | Generate slide images for a PowerPoint |
-# MAGIC
-# MAGIC > **Presenter Note:** Circulate the room during this section. Common stumbling points:
-# MAGIC > - Participants may try to parse very large files -- remind them of the 500-page PDF limit
-# MAGIC > - The `content` column from `read_files` is binary -- it cannot be displayed directly
-# MAGIC > - VARIANT path notation uses `:` not `.` (e.g., `parsed:elements` not `parsed.elements`)
+# MAGIC ## Step 7: What about Large Documents?
+# MAGIC `ai_parse_document` has some [limitations](https://docs.databricks.com/aws/en/sql/language-manual/functions/ai_parse_document#limitations) that you need to be aware of.  The most significant is that documents are limited to a maximum of 500 pages and 100 MB. The solution is to use the `pageRange` argument to parse the document in chunks.
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Exercise 1: Parse All Documents and Save to a Delta Table
+# MAGIC ## Step 7: Parse All Documents and Save to a Delta Table
 # MAGIC
-# MAGIC This exercise uses the **PySpark API** to parse all documents in the Volume and persist the results
-# MAGIC as a Delta table. This is the pattern you would use in a production pipeline.
+# MAGIC Parse all documents in the Bronze and persist the results
+# MAGIC as a Silver table. This is the pattern you would use in a production pipeline.
 # MAGIC
 # MAGIC **What is happening here:**
-# MAGIC 1. `spark.read.format("binaryFile")` reads every file as raw bytes
+# MAGIC 1. `spark.read.table(...)` reads the Bronze table into a Dataframe
 # MAGIC 2. `expr("ai_parse_document(...)")` calls the SQL function from PySpark
-# MAGIC 3. `.saveAsTable()` persists the results as a managed Delta table in Unity Catalog
+# MAGIC 3. `.saveAsTable(...)` persists the results as a managed Delta table in Unity Catalog
 # MAGIC
-# MAGIC > **Presenter Note:** This is the first time participants see `ai_parse_document` called from Python
-# MAGIC > via `expr()`. Emphasize that it is the exact same function -- PySpark's `expr()` lets you call any
-# MAGIC > SQL function inline.
 
 # COMMAND ----------
 
-# Exercise 1: Parse all documents and save to a Delta table
+# DBTITLE 1,Parse all documents and save to a Delta table
 from pyspark.sql.functions import expr
 
-df = (spark.read
-    .format("binaryFile")
-    .option("recursiveFileLookup", "true")
-    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}"))
+df = (spark.read.table ("01_bronze_raw_documents"))
 
 df_parsed = df.withColumn(
     "parsed",
-    expr("ai_parse_document(content, MAP('version', '2.0'))")
+    expr(f"""
+        ai_parse_document(
+            content, 
+            MAP('version', '2.0',
+            'descriptionElementTypes', 'figure',
+            'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images/')
+        )
+    """)
 )
 
-df_parsed.write.mode("overwrite").saveAsTable(f"{catalog}.{schema}.parsed_documents")
+df_parsed.write.mode("overwrite").saveAsTable("02_silver_parsed_documents")
 print("Parsed documents saved!")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Exercise 2: Count Elements by Type Across All Documents
+# MAGIC ## Step 8: Extract All Text from a Specific Document
 # MAGIC
-# MAGIC Now that the parsed results are in a Delta table, let's analyze what types of content the parser found.
-# MAGIC This gives you a high-level inventory of your document corpus.
-# MAGIC
-# MAGIC **What to look for:**
-# MAGIC - `text` elements should be the most common
-# MAGIC - `table` elements indicate structured data you can extract
-# MAGIC - `figure` elements are charts/images that may need multimodal analysis (Day 2)
+# MAGIC Take the parsed content of a document from the table and **chunk it for embedding** **_with_** additional context. This is the foundation for building a RAG pipeline -- you need clean, structured text to chunk and embed, but including context such as headers into each chunk will improve accuracy.
+# MAGIC  
 
 # COMMAND ----------
 
-#  Exercise 2: Count elements by type across all documents
-display(spark.sql(f"""
-    SELECT
-        elem:type::STRING AS element_type,
-        COUNT(*) AS count
-    FROM {catalog}.{schema}.parsed_documents
-    LATERAL VIEW explode(parsed:document:elements::ARRAY<VARIANT>) AS elem
-    GROUP BY elem:type::STRING
-    ORDER BY count DESC
-"""))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Exercise 3: Extract All Text from a Specific Document
-# MAGIC
-# MAGIC Pick a document from the table and extract its readable content. This is the foundation for
-# MAGIC building a RAG pipeline -- you need clean, structured text to chunk and embed.
-# MAGIC
-
-# COMMAND ----------
-
-# DBTITLE 1,Extract all text from a specific document
-# Exercise 3: Extract all text from a specific document
+# DBTITLE 1,Extract embedding text from a specific document
 # ai_prep_search splits the parsed output into semantic chunks ready for RAG --
 # no manual element filtering or exploding needed.
-# TODO: Change the path filter to a document you're interested in
-display(spark.sql(f"""
+
+display(spark.sql("""
     WITH prepped AS (
         SELECT
-            path,
+            fileName,
             ai_prep_search(parsed) AS result
-        FROM {catalog}.{schema}.parsed_documents
+        FROM 02_silver_parsed_documents
         WHERE path LIKE '%amazon_10-K-2024-As-Filed.pdf'
     )
     SELECT
-        path,
+        fileName,
         chunk:chunk_position::INT       AS chunk_position,
         chunk:chunk_to_retrieve::STRING AS text,
         chunk:chunk_to_embed::STRING    AS text_with_context
@@ -489,46 +433,6 @@ display(spark.sql(f"""
     LATERAL VIEW explode(result:document:contents::ARRAY<VARIANT>) AS chunk
     ORDER BY chunk_position
 """))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Exercise 4 (Stretch): Generate Slide Images for a PowerPoint
-# MAGIC
-# MAGIC This exercise combines everything: read a PowerPoint file, parse it with image output enabled,
-# MAGIC and verify the slide images were created.
-# MAGIC
-# MAGIC **Key details:**
-# MAGIC - `.collect()` forces Spark to execute the computation (lazy evaluation)
-# MAGIC - The images will appear in the Volume path you specified
-# MAGIC - Each image corresponds to one slide
-# MAGIC
-
-# COMMAND ----------
-
-# Exercise 4 (Stretch): Generate slide images for a PowerPoint
-from pyspark.sql.functions import expr
-
-df_pptx = (spark.read
-    .format("binaryFile")
-    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}")
-    .filter("path LIKE '%.pptx'")
-    .limit(1))
-
-df_with_images = df_pptx.withColumn(
-    "parsed",
-    expr(f"""
-        ai_parse_document(
-            content, 
-            MAP(
-                'version', '2.0',
-                'imageOutputPath', '/Volumes/{catalog}/{schema}/{personal_volume}/slide_images'
-            )
-        )
-    """)
-)
-df_with_images.collect()  # Trigger the parsing
-display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_images"))
 
 # COMMAND ----------
 
@@ -541,7 +445,8 @@ display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_imag
 # MAGIC 1. **`ai_parse_document`** is a single SQL function that replaces your Parsing Service, Conversion Service, and Step Functions orchestration
 # MAGIC 2. It returns **structured VARIANT output** with element-level classification (text, table, figure, etc.)
 # MAGIC 3. Tables are extracted as **HTML**, preserving structure for downstream processing
-# MAGIC 4. The **`imageOutputPath`** parameter renders slides/pages as PNG images -- directly solving the "slide as image" requirement
+# MAGIC 4. The **`imageOutputPath`** parameter renders slides/pages as PNG images
+# MAGIC 4. The **descriptionElementsTypes** provides an AI generated description for any figures and images in the document
 # MAGIC 5. The same function works from **SQL and PySpark** via `expr()`
 # MAGIC 6. Results persist naturally in **Delta tables** for reuse across the pipeline
 # MAGIC
@@ -553,14 +458,10 @@ display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_imag
 # MAGIC   (6 components, multiple failure points, custom error handling)
 # MAGIC
 # MAGIC AFTER (Databricks):
-# MAGIC   Volume -> ai_parse_document() -> Delta Table
+# MAGIC   SharePoint -> Bronze -> ai_parse_document() -> Silver Table
 # MAGIC   (1 function call, automatic retries, governed by Unity Catalog)
 # MAGIC ```
 # MAGIC
 # MAGIC ### What's Next
 # MAGIC
-# MAGIC In the next block, we will take the parsed content and **chunk it for embedding** -- the next step
-# MAGIC toward building a RAG pipeline. In Day 2, we will use the slide images with multimodal LLMs.
-# MAGIC
-# MAGIC > **Presenter Note:** Before moving on, ask if anyone encountered errors or unexpected results.
-# MAGIC > Common issues: file format not supported, Volume path permissions, very large files timing out.
+# MAGIC In Day 2, we will use the slide images with multimodal LLMs.

@@ -51,7 +51,6 @@
 # MAGIC
 # MAGIC ![Lakeflow Connect for SharePoint](./images/sharepoint_connector.png)
 # MAGIC
-# MAGIC > **Presenter note:** Walk through the architecture diagram. Emphasize that the Unity Catalog connection stores the OAuth credentials centrally — no more rotating secrets in Lambda environment variables. The connection is created once by an admin and referenced by name in all notebooks.
 
 # COMMAND ----------
 
@@ -64,48 +63,26 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Read SharePoint - Python
 # ============================================================
 # Batch read binary files from SharePoint
 # ============================================================
+from pyspark.sql.functions import regexp_extract, substring
 
 df = (spark.read
     .format("binaryFile")
     .option("databricks.connection", sharepoint_connector)
     .option("recursiveFileLookup", True)
-    .option("pathGlobFilter", "*.{pdf,pptx,docx}")
-    .load(sharepoint_site_url))
+    .load(f"{sharepoint_site_url}/Shared%20Documents")
+    .withColumn("fileName", regexp_extract("path", r"([^/]+)$", 1))
+)
 
-display(df.select("path", "modificationTime", "length"))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### 3. SQL Approach with `read_files()`
-# MAGIC
-# MAGIC If you prefer SQL, Databricks also exposes SharePoint reads through the `read_files()` table-valued function. This is especially useful for analysts who want to explore SharePoint content without writing Python.
-# MAGIC
-# MAGIC > **Presenter note:** This is the same operation as cell 2, just expressed in SQL. Point out that the connection name and options are passed as named parameters. This also works in dashboards and scheduled SQL queries.
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC -- ============================================================
-# MAGIC -- SQL approach: read binary files from SharePoint
-# MAGIC -- ============================================================
-# MAGIC
-# MAGIC SELECT path, length, modificationTime
-# MAGIC FROM read_files(
-# MAGIC   :sharepoint_site_url,
-# MAGIC   `databricks.connection` => :sharepoint_connector,
-# MAGIC   format => 'binaryFile',
-# MAGIC   pathGlobFilter => '*.{pdf,pptx,docx}',
-# MAGIC   schemaEvolutionMode => 'none'
-# MAGIC )
+display(df.select("fileName", "path", "modificationTime", "length", substring("content", 1, 100).alias("content_preview")))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 4. File Type Filtering with `pathGlobFilter`
+# MAGIC ### 3. File Type Filtering with `pathGlobFilter`
 # MAGIC
 # MAGIC The `pathGlobFilter` option lets you control which file types are ingested at the source — before any data is loaded into memory.
 # MAGIC
@@ -119,18 +96,31 @@ display(df.select("path", "modificationTime", "length"))
 # MAGIC | `*.{pdf,pptx,docx}` | PDFs, PowerPoints, and Word docs |
 # MAGIC | `*.{pdf,pptx,docx,xlsx}` | Add Excel spreadsheets too |
 # MAGIC
-# MAGIC **What this replaces:**
-# MAGIC
-# MAGIC In your current Lambda-based pipeline, you likely have folder-exclusion logic or file-extension checks in Python code. With `pathGlobFilter`, that logic moves into the connector itself — fewer lines of code, fewer bugs, and filtering happens before data transfer.
-# MAGIC
-# MAGIC > **Presenter note:** Ask the audience what file types they currently ingest. Some teams may also need `.xlsx` or `.csv`. The glob pattern is flexible — you can add any extension to the curly-brace list.
+
+# COMMAND ----------
+
+# DBTITLE 1,Read SharePoint - pathGlobFilter
+# ============================================================
+# Batch read binary files from SharePoint
+# ============================================================
+
+df = (spark.read
+    .format("binaryFile")
+    .option("databricks.connection", sharepoint_connector)
+    .option("recursiveFileLookup", True)
+    .option("pathGlobFilter", "*.pdf")
+    .load(f"{sharepoint_site_url}/Shared%20Documents")
+    .withColumn("fileName", regexp_extract("path", r"([^/]+)$", 1))
+)
+
+display(df.select("fileName", "path", "modificationTime", "length", substring("content", 1, 100).alias("content_preview")))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 5. SharePoint Metadata Exploration
+# MAGIC ### 4. SharePoint Metadata Exploration
 # MAGIC
-# MAGIC Starting with **Databricks Runtime 18+**, the SharePoint connector exposes a special `_sharepoint_metadata` struct column that contains rich metadata from the SharePoint API.
+# MAGIC The SharePoint connector exposes a special `_sharepoint_metadata` struct column that contains rich metadata from the SharePoint API.
 # MAGIC
 # MAGIC **Available fields include:**
 # MAGIC - `mime_type` — the MIME type of the file (e.g., `application/pdf`)
@@ -140,24 +130,25 @@ display(df.select("path", "modificationTime", "length"))
 # MAGIC
 # MAGIC This metadata lets you filter, tag, and route documents based on who created them, where they live, or what type they are — all without parsing filenames.
 # MAGIC
-# MAGIC > **Presenter note:** This is a Runtime 18+ feature. If the cluster is on an earlier runtime, the `_sharepoint_metadata` column will not be available. Check the cluster runtime version before running this cell.
 
 # COMMAND ----------
 
+# DBTITLE 1,SharePoint Metadata
 # ============================================================
-# Explore SharePoint metadata (requires Runtime 18+)
+# Explore SharePoint metadata
 # ============================================================
 
 df_meta = (spark.read
     .format("binaryFile")
     .option("databricks.connection", sharepoint_connector)
-    .load(sharepoint_site_url)
+    .load(f"{sharepoint_site_url}/Shared%20Documents")
     .select("path", "length", "_sharepoint_metadata"))
 
 display(df_meta)
 
 # COMMAND ----------
 
+# DBTITLE 1,Filter on SharePoint Metadata
 # Filter by metadata — e.g., only PDF files based on MIME type
 df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
@@ -171,7 +162,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # DBTITLE 1,Cell 14
 # MAGIC %md
-# MAGIC ### 6. Auto Loader Introduction
+# MAGIC ### 5. Auto Loader Introduction
 # MAGIC
 # MAGIC **Auto Loader** (`cloudFiles` format) is Databricks' built-in solution for incrementally processing new files as they arrive. When combined with the SharePoint connector, it replaces the need for:
 # MAGIC
@@ -190,20 +181,21 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 # MAGIC | First run | **Full crawl** (`includeExistingFiles=True`) | ALL existing files in the SharePoint library |
 # MAGIC | Subsequent runs | **Incremental** | Only new or modified files since last checkpoint |
 # MAGIC
-# MAGIC > **Presenter note:** Emphasize the operational simplicity here. Their current architecture has at least three AWS services (EventBridge, Lambda, DynamoDB) doing what Auto Loader does out of the box. The checkpoint location is just a path — no infrastructure to manage.
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 7. Streaming Read with Auto Loader
+# MAGIC ### 6. Streaming Read with Auto Loader
 # MAGIC
 # MAGIC The code below sets up a streaming pipeline that:
 # MAGIC 1. Reads all existing files on the first run (full crawl)
 # MAGIC 2. On subsequent runs, processes only new/modified files (incremental)
-# MAGIC 3. Writes everything to a Delta table (`workshop.default.raw_documents`)
+# MAGIC 3. Writes everything to a Delta table (`01_bronze_raw_documents`)
 # MAGIC 4. Uses `trigger(availableNow=True)` to process all available files and then stop
 # MAGIC
-# MAGIC > **Presenter note:** Walk through each option. `availableNow=True` is key — it processes everything available right now and stops, which is ideal for scheduled jobs. For real-time ingestion, you would use `trigger(processingTime="5 minutes")` instead.
+# MAGIC > `availableNow=True` processes everything available right now and stops, which is ideal for scheduled jobs. 
+# MAGIC
+# MAGIC >For real-time ingestion, you would use something like `trigger(processingTime="5 minutes")` instead.
 
 # COMMAND ----------
 
@@ -218,27 +210,34 @@ df_stream = (spark.readStream
     .option("cloudFiles.includeExistingFiles", True)
     .option("databricks.connection", sharepoint_connector)
     .option("pathGlobFilter", "*.{pdf,pptx,docx}")
-    .load(sharepoint_site_url))
+    .load(f"{sharepoint_site_url}/Shared%20Documents")
+    .withColumn("fileName", regexp_extract("path", r"([^/]+)$", 1))
+)
 
 # Write to a Delta table with checkpoint tracking
 query = (df_stream.writeStream
     .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{personal_volume}/checkpoints/raw_docs")
     .trigger(availableNow=True)
-    .toTable(f"{catalog}.{schema}.raw_documents"))
+    .toTable(f"{catalog}.{schema}.01_bronze_raw_documents"))
 
 # COMMAND ----------
 
-# DBTITLE 1,Print Auto Loader file count
-# Wait for the streaming query to finish, then report how many files were processed
-query.awaitTermination()
-
-files_processed = query.lastProgress.sources[0].numInputRows if query.lastProgress else 0
-print(f"Files processed in this run: {files_processed}")
+# DBTITLE 1,Examine the Bronze table
+display(spark.read.table(f"{catalog}.{schema}.01_bronze_raw_documents")
+        .select("fileName", "path", "modificationTime", "length", substring("content", 1, 100)))
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 8. Full vs. Incremental Crawl
+# MAGIC ## Incremental ingestion
+# MAGIC 1.  Drag a new file (pdf, pptx, or doc) into SharePoint
+# MAGIC 1.  Rerun the cell `Autoload files from SharePoint`
+# MAGIC 1.  Rerun the cell `Examine the Bronze table`.  Note there is one additional row.
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### 7. Full vs. Incremental Crawl
 # MAGIC
 # MAGIC Understanding how Auto Loader manages state is critical for building reliable pipelines.
 # MAGIC
@@ -256,87 +255,8 @@ print(f"Files processed in this run: {files_processed}")
 # MAGIC - The **checkpoint location** (`/Volumes/{catalog}/{schema}/{volume}/checkpoints/raw_docs`) is where Auto Loader stores its state
 # MAGIC - If you delete the checkpoint, the next run becomes a full crawl again
 # MAGIC - You do **not** need to build custom tracking logic — Auto Loader handles it
-# MAGIC - This is exactly what your Lambda + DynamoDB tracker was doing, but with zero custom code
 # MAGIC
-# MAGIC > **Presenter note:** Ask the audience how they currently track which files have been processed. Most teams have a DynamoDB table or a metadata database for this. Point out that the checkpoint replaces all of that. If someone asks about reprocessing, explain that deleting the checkpoint forces a full re-crawl.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ---
-# MAGIC ## Hands-on Exercise (15 min)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Now it's your turn!
-# MAGIC
-# MAGIC In this exercise, you will practice reading and exploring document files using Spark's `binaryFile` format. We will use a pre-loaded Volume as the data source so that the exercises work even if SharePoint connectivity is not yet configured.
-# MAGIC
-# MAGIC **Instructions:**
-# MAGIC 1. Run each exercise cell below
-# MAGIC 2. Look for `TODO` comments where you need to fill in code
-# MAGIC 3. Compare your results with your neighbor
-# MAGIC
-# MAGIC **Data source:** `/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/` contains sample PDF, PPTX, and DOCX files.
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Exercise 1: Read Documents from the Workshop Volume
-# MAGIC
-# MAGIC Read all binary files from the pre-loaded Volume and inspect their paths, modification times, and sizes.
-
-# COMMAND ----------
-
-# ============================================================
-# Exercise 1: Read documents from the workshop Volume
-# ============================================================
-
-df = (spark.read
-    .format("binaryFile")
-    .load(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}/"))
-
-display(df.select("path", "modificationTime", "length"))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Exercise 2: Filter to Only PDF Files
-# MAGIC
-# MAGIC Using the DataFrame from Exercise 1, filter the results to include only `.pdf` files.
-
-# COMMAND ----------
-
-# ============================================================
-# Exercise 2: Filter to only PDF files
-# TODO: Add a filter for .pdf files only
-# ============================================================
-
-df_pdf = df.filter("path LIKE '%.pdf'")
-display(df_pdf)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Exercise 3: Count Files by Extension
-# MAGIC
-# MAGIC Extract the file extension from each path and count how many files exist for each type.
-
-# COMMAND ----------
-
-# ============================================================
-# Exercise 3: Count files by extension
-# ============================================================
-from pyspark.sql.functions import regexp_extract
-
-df_types = (df
-    .withColumn("extension", regexp_extract("path", r"\.([^.]+)$", 1))
-    .groupBy("extension")
-    .count()
-    .orderBy("count", ascending=False))
-
-display(df_types)
+# MAGIC > How do you currently track which files have been processed? Most teams have a DynamoDB table or a metadata database for this. The checkpoint replaces all of that.
 
 # COMMAND ----------
 
