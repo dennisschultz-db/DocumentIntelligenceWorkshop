@@ -199,6 +199,21 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC ## Step 2 — Detect page count per PDF
+# MAGIC
+# MAGIC Knowing the number of pages in PDF documents will be important when parsing documents in the next module.
+# MAGIC
+# MAGIC The notebook `./_resources/Utilities` defines a Pandas User Defined Function (UDF) that uses the `pypdf` library to determine the page count for PDF documents. 
+# MAGIC - Bad/encrypted files return `-1` so they surface in downstream filters without killing the job
+# MAGIC - Non-PDF documents also return `-1`
+
+# COMMAND ----------
+
+# MAGIC %run ./_resources/Utilities
+
+# COMMAND ----------
+
 # DBTITLE 1,Autoload files from SharePoint
 # ============================================================
 # Auto Loader: streaming read from SharePoint
@@ -212,6 +227,7 @@ df_stream = (spark.readStream
     .option("pathGlobFilter", "*.{pdf,pptx,docx}")
     .load(f"{sharepoint_site_url}/Shared%20Documents")
     .withColumn("fileName", regexp_extract("path", r"([^/]+)$", 1))
+    .withColumn("page_count", pdf_page_count("content"))
 )
 
 # Write to a Delta table with checkpoint tracking
