@@ -7,14 +7,16 @@ from pyspark.sql.functions import col, expr
 @dp.materialized_view(
     comment="Flattened document text ready for enrichment"
 )
-def pipeline_document_text():
-    return (spark.read.table("pipeline_parsed_documents")
+def p_document_text():
+    return (spark.read.table("p02_silver_parsed_documents")
         .selectExpr(
+            "fileName",
             "path",
             "modificationTime",
             "explode(try_cast(elements AS ARRAY<VARIANT>)) as element"
         )
         .selectExpr(
+            "fileName",
             "path",
             "modificationTime",
             "try_cast(element:type AS STRING) as element_type",

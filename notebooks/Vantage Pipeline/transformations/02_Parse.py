@@ -4,17 +4,19 @@ from pyspark.sql.functions import col, expr
 # ============================================================
 # STAGE 2: PARSE -- Extract text, images, tables from documents
 # Replaces: Parsing Service + Conversion Service + Step Functions
+# NOTE: pipeline_parsed_documents (MV) is now replaced by
+#       pipeline_parsed_documents_v2 (ST). Drop the old table manually.
 # ============================================================
-@dp.materialized_view(
-    comment="Parsed document content with extracted elements"
+@dp.table(
+    comment="Parsed binary documents ingested from SharePoint"
 )
-def pipeline_parsed_documents():
+def p02_silver_parsed_documents():
 
     catalog = spark.conf.get("catalog", "dennis_schultz")
     schema  = spark.conf.get("schema", "default")
-    volume  = spark.conf.get("volume", "my_volume")
+    volume  = spark.conf.get("volume", "my_volume")  # update to match your UC volume name
 
-    return (spark.read.table("pipeline_raw_documents")
+    return (spark.readStream.table("p01_bronze_raw_documents")
         .withColumn(
             "parsed",
             expr(f"""
@@ -27,6 +29,7 @@ def pipeline_parsed_documents():
                 )
         """))
         .select(
+            "fileName",
             "path",
             "modificationTime",
             expr("parsed:document:elements").alias("elements"),
