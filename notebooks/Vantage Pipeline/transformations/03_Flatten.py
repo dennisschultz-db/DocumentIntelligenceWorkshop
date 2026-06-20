@@ -7,7 +7,7 @@ from pyspark.sql.functions import col, expr
 @dp.materialized_view(
     comment="Flattened document text ready for enrichment"
 )
-def p_document_text():
+def p03_gold_document_text():
     return (spark.read.table("p02_silver_parsed_documents")
         .selectExpr(
             "fileName",

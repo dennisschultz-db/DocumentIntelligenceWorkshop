@@ -1,5 +1,22 @@
 from pyspark import pipelines as dp
-from pyspark.sql.functions import regexp_extract
+from pyspark.sql.functions import regexp_extract, pandas_udf
+from pyspark.sql.types import IntegerType
+import pandas as pd
+
+@pandas_udf(IntegerType())
+def pdf_page_count(content: pd.Series) -> pd.Series:
+    import io
+    from pypdf import PdfReader
+
+    def _count(b):
+        if b is None:
+            return None
+        try:
+            return len(PdfReader(io.BytesIO(bytes(b))).pages)
+        except Exception:
+            return None
+
+    return content.apply(_count)
 
 # ============================================================
 # STAGE 1: INGEST -- Raw documents from SharePoint
@@ -24,4 +41,5 @@ def p01_bronze_raw_documents():
         .option("pathGlobFilter", "*.{pdf,pptx,docx}")
         .load(site)
         .withColumn("fileName", regexp_extract("path", r"([^/]+)$", 1))
-        .select("fileName", "path", "content", "modificationTime", "length"))
+        .withColumn("page_count", pdf_page_count("content"))
+        .select("fileName", "path", "content", "modificationTime", "length", "page_count"))
