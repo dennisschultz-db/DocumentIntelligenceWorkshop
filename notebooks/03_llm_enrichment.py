@@ -367,8 +367,8 @@ spark.sql(f"""
 # MAGIC             summarize_document(silver.parsed) AS summary,
 # MAGIC             extract_document(silver.parsed) AS metadata,
 # MAGIC             summarize_document_pig_latin(gold.text) AS summary_pig_latin
-# MAGIC         FROM dennis_schultz.dennis_schultz.02_silver_parsed_documents silver
-# MAGIC             LEFT JOIN dennis_schultz.dennis_schultz.03_gold_document_text gold
+# MAGIC         FROM 02_silver_parsed_documents silver
+# MAGIC             LEFT JOIN 03_gold_document_text gold
 # MAGIC                 ON silver.fileName = gold.fileName
 # MAGIC     )
 # MAGIC     SELECT
