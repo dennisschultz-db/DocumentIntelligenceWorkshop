@@ -13,7 +13,7 @@ def p03_gold_document_text():
             "fileName",
             "path",
             "modificationTime",
-            "explode(try_cast(elements AS ARRAY<VARIANT>)) as element"
+            "explode(try_cast(parsed:document:elements AS ARRAY<VARIANT>)) as element"
         )
         .selectExpr(
             "fileName",

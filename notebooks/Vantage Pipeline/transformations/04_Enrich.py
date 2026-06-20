@@ -16,7 +16,7 @@ def p03_gold_enriched_documents():
             concat_ws('\n',
                 filter(
                     transform(
-                        try_cast(elements AS ARRAY<VARIANT>),
+                        try_cast(parsed:document:elements AS ARRAY<VARIANT>),
                         e -> CASE WHEN try_cast(e:type AS STRING) IN ('text', 'title', 'section_header', 'table')
                                   THEN try_cast(e:content AS STRING) END
                     ),
