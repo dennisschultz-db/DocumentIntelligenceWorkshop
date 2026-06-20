@@ -413,20 +413,12 @@ spark.sql('SHOW SCHEMAS').display();
 
 # Let's list the documents available in our workshop Volume
 display(test_documents_volume)
-display(dbutils.fs.ls(f"{test_documents_volume}"))
+display(dbutils.fs.ls(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volume}"))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC The files listed above are the documents we will process throughout this workshop. These represent the types of documents that flow through your current pipeline — PDFs, Word documents, and other file types.
-# MAGIC
-# MAGIC Finally, let's run a simple query to confirm our SQL warehouse is working correctly.
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC -- Let's verify we can query data
-# MAGIC SELECT 'Workshop is ready!' AS status, current_timestamp() AS checked_at
 
 # COMMAND ----------
 
@@ -454,4 +446,3 @@ display(dbutils.fs.ls(f"{test_documents_volume}"))
 # MAGIC
 # MAGIC Take a short break and we will reconvene at 10:00.
 # MAGIC
-# MAGIC > **Presenter note:** Use the break to check in with participants individually. Ask which capabilities are most exciting to them and what questions they have. Gauge the room's comfort level with notebooks and SQL — this will inform how much scaffolding to provide in Block 2.

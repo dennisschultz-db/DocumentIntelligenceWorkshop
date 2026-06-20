@@ -11,35 +11,35 @@ from pyspark.sql.functions import col, expr
     comment="Documents enriched with LLM-generated summaries and classifications"
 )
 def p03_gold_enriched_documents():
-    return (spark.readStream.table("p02_silver_parsed_documents")
-        .withColumn("full_text", expr("""
-            concat_ws('\n',
-                filter(
-                    transform(
-                        try_cast(elements AS ARRAY<VARIANT>),
-                        e -> CASE WHEN try_cast(e:type AS STRING) IN ('text', 'title', 'section_header', 'table')
-                                  THEN try_cast(e:content AS STRING) END
-                    ),
-                    x -> x IS NOT NULL
-                )
-            )
-        """))
-        .withColumn("summary", expr("""
-            ai_query('databricks-meta-llama-3-3-70b-instruct',
-                'Summarize in 3-5 sentences: ' || left(full_text, 4000),
-                modelParameters => named_struct('max_tokens', 500),
-                failOnError => false)
-        """))
-        .withColumn("category", expr("""
-            ai_classify(
-                left(full_text, 2000),
-                ARRAY('report', 'presentation', 'memo', 'proposal', 'technical', 'financial', 'marketing', 'legal', 'other')
-            )
-        """))
-        .withColumn("extracted_metadata", expr("""
-            ai_extract(
-                left(full_text, 4000),
-                '["title", "author", "key_topics"]'
-            )
-        """))
-        .select("fileName", "path", "modificationTime", "full_text", "summary", "category", "extracted_metadata"))
+    catalog = spark.conf.get("catalog", "dennis_schultz")
+    schema  = spark.conf.get("schema", "dennis_schultz")
+
+    return (spark.sql(f"""
+        WITH enriched AS (
+            SELECT
+                silver.fileName,
+                from_json(
+                    {catalog}.{schema}.classify_document(silver.parsed),
+                    'STRUCT<response: STRING, error_message: STRING>') AS classified_output,
+                {catalog}.{schema}.summarize_document(silver.parsed) AS summary,
+                {catalog}.{schema}.extract_document(silver.parsed) AS metadata,
+                {catalog}.{schema}.summarize_document_pig_latin(gold.text) AS summary_pig_latin
+            FROM p02_silver_parsed_documents silver
+                LEFT JOIN p03_gold_document_text gold
+                    ON silver.fileName = gold.fileName
+        )
+        SELECT
+            fileName,
+            -- Extract first element from JSON string array in classified_output.response
+            from_json(classified_output.response, 'ARRAY<STRING>')[0] AS category,
+            classified_output.error_message AS error_message,
+            metadata.title::STRING as title,
+            metadata.company::STRING as company,
+            metadata.product::STRING as product,
+            metadata.author::STRING as author,
+            metadata.date::STRING as date,
+            metadata.key_topics::ARRAY<STRING> as key_topics,
+            summary,
+            summary_pig_latin
+        FROM enriched
+    """))

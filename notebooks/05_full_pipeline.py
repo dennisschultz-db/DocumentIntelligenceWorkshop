@@ -9,18 +9,14 @@
 
 # DBTITLE 1,Cell 2
 # MAGIC %md
-# MAGIC # Block 5 (Part 2): Assembling the Declarative Pipeline
-# MAGIC **Day 2 | 10:05 - 10:45 AM**
+# MAGIC # Block 5: Assembling the Declarative Pipeline
 # MAGIC
 # MAGIC ---
 # MAGIC
-# MAGIC ## Introduction to Lakeflow Declarative Pipelines
+# MAGIC ## Introduction to Spark Declarative Pipelines
 # MAGIC
-# MAGIC **Lakeflow Declarative Pipelines** (formerly Delta Live Tables / DLT) is the single most important capability we will show you in this workshop. Everything we have built so far -- SharePoint ingestion, document parsing, LLM enrichment, Elasticsearch sync -- comes together here in **one Python file**.
+# MAGIC **Spark Declarative Pipelines** (formerly Delta Live Tables / DLT) is the single most important capability we will show you in this workshop. Everything we have built so far -- SharePoint ingestion, document parsing, LLM enrichment, Elasticsearch sync -- comes together here.
 # MAGIC
-# MAGIC Let that sink in: **a single Python file replaces your ENTIRE microservices architecture.**
-# MAGIC
-# MAGIC No SQS queues. No Step Functions. No Lambda triggers. No DynamoDB state tables. No CloudWatch alarm chains. One file. One pipeline. One place to monitor, debug, and evolve.
 # MAGIC
 # MAGIC **What the platform handles automatically:**
 # MAGIC - **Dependency management** -- the system knows which tables depend on which, and executes them in the right order
@@ -33,7 +29,6 @@
 # MAGIC
 # MAGIC ![Bronze Tables Pipeline](./images/bronze_tables_pipeline.png)
 # MAGIC
-# MAGIC > **Presenter note:** This is the climax of the workshop. Pause here and let the audience absorb the claim. Then say: "Let me prove it to you." Everything that follows is the proof. By the end of this section, they should be able to look at one Python file and trace the entire document processing pipeline from SharePoint ingestion through Elasticsearch output. Contrast this explicitly with the effort required to trace a document through their current system: Lambda trigger, SQS queue, parsing service, another SQS queue, enrichment service, another SQS queue, Elasticsearch writer -- any one of which can fail silently.
 
 # COMMAND ----------
 
@@ -41,7 +36,7 @@
 # MAGIC ---
 # MAGIC ## Pipeline Concepts
 # MAGIC
-# MAGIC Before we look at the code, let's understand the four building blocks of a Lakeflow Declarative Pipeline:
+# MAGIC Before we look at the code, let's understand the building blocks of a Lakeflow Declarative Pipeline:
 # MAGIC
 # MAGIC ### 1. Streaming Table (`@dp.table`)
 # MAGIC - **Purpose:** Exactly-once ingestion from streaming sources
@@ -73,7 +68,6 @@
 # MAGIC - **Behavior:** Streams data continuously (or in triggered batches) from source to sink
 # MAGIC - **Think of it as:** The final SQS queue that routes enriched documents to Elasticsearch
 # MAGIC
-# MAGIC > **Presenter note:** Walk through each concept and ask the audience to mentally map it to their current architecture. Streaming Table = the S3 landing zone + SQS trigger. Materialized View = the parsing/enrichment services. Expectations = the validation logic scattered across Lambda functions. ForEachBatch Sink = the Elasticsearch writer. The mapping should be intuitive because we designed the pipeline to mirror their existing flow.
 
 # COMMAND ----------
 
@@ -96,7 +90,7 @@
 # MAGIC                                   enriched_documents (Materialized View)
 # MAGIC                                            |
 # MAGIC                                            v
-# MAGIC                                   elasticsearch_sink (ForEachBatch)
+# MAGIC                                   elasticsearch_sink 
 # MAGIC ```
 # MAGIC
 # MAGIC Now let's map each stage to the AWS services it replaces:
@@ -110,9 +104,6 @@
 # MAGIC | **State Management** | DynamoDB tables tracking document status at each stage | Delta Lake (ACID transactions, time travel, automatic versioning) |
 # MAGIC | **Monitoring** | CloudWatch metrics + X-Ray traces + custom dashboards | Pipeline event log + system tables + built-in pipeline UI |
 # MAGIC
-# MAGIC **Services eliminated:** ~20+ AWS components collapsed into 5 Python functions in a single file.
-# MAGIC
-# MAGIC > **Presenter note:** This is the table to linger on. Go row by row. For each row, ask: "Who maintains this in your current system?" and "What happens when it breaks at 2 AM?" Then point to the Databricks column and say: "This is managed by the platform." The emotional impact should be relief -- not that their current system is bad, but that it does not have to be this hard.
 
 # COMMAND ----------
 
@@ -120,129 +111,15 @@
 # MAGIC ---
 # MAGIC ## The Complete Pipeline Definition
 # MAGIC
-# MAGIC This is the star of the show. The cell below contains the **entire pipeline** -- from SharePoint ingestion through Elasticsearch output -- in a single Python file.
+# MAGIC The Spark Declarative Pipeline contains the **entire pipeline** -- from SharePoint ingestion through Elasticsearch output in a set of organized Python files.
 # MAGIC
-# MAGIC Read it top to bottom. Each function is a stage. Each decorator tells the system what kind of table to create and what quality constraints to enforce. The system handles everything else: ordering, retries, checkpointing, monitoring.
+# MAGIC Each function is a stage. Each decorator tells the system what kind of table to create and what quality constraints to enforce. The system handles everything else: ordering, retries, checkpointing, monitoring.
 # MAGIC
-# MAGIC > **Presenter note:** Walk through this code slowly. Do NOT rush. This is the payoff for the entire workshop. Read each section header aloud and remind the audience which AWS services it replaces. When you get to the AI Functions in Stage 4, point out that LLM calls are just SQL expressions -- no API client libraries, no retry logic, no token management. When you get to Stage 5, point out that the Elasticsearch sink is embedded in the pipeline, not a separate service.
 
 # COMMAND ----------
 
-from pyspark import pipelines as dp
-from pyspark.sql.functions import col, expr
-
-# ============================================================
-# STAGE 1: INGEST -- Raw documents from SharePoint
-# Replaces: Lambda + Graph API + S3 staging + SQS trigger
-# ============================================================
-@dp.table(
-    comment="Raw binary documents ingested from SharePoint via Auto Loader"
-)
-@dp.expect_or_drop("has_content", "content IS NOT NULL")
-@dp.expect_or_drop("valid_size", "length > 0 AND length < 104857600")  # 100MB max
-def raw_documents():
-    return (spark.readStream
-        .format("cloudFiles")
-        .option("cloudFiles.format", "binaryFile")
-        .option("databricks.connection", "sharepoint_conn")
-        .option("pathGlobFilter", "*.{pdf,pptx,docx}")
-        .load("https://TENANT.sharepoint.com/sites/SITE/Shared%20Documents")
-        .select("path", "content", "modificationTime", "length"))
-
-# ============================================================
-# STAGE 2: PARSE -- Extract text, images, tables from documents
-# Replaces: Parsing Service + Conversion Service + Step Functions
-# ============================================================
-@dp.materialized_view(
-    comment="Parsed document content with extracted elements"
-)
-def parsed_documents():
-    return (spark.read.table("raw_documents")
-        .withColumn("parsed", expr("""
-            ai_parse_document(content, MAP(
-                'version', '2.0',
-                'imageOutputPath', '/Volumes/workshop/default/slide_images/'
-            ))
-        """))
-        .select(
-            "path", "modificationTime",
-            expr("parsed:elements").alias("elements"),
-            expr("parsed:metadata").alias("doc_metadata")
-        ))
-
-# ============================================================
-# STAGE 3: FLATTEN -- Extract and structure text content
-# ============================================================
-@dp.materialized_view(
-    comment="Flattened document text ready for enrichment"
-)
-def document_text():
-    return (spark.read.table("parsed_documents")
-        .selectExpr(
-            "path", "modificationTime",
-            "explode(elements) as element"
-        )
-        .selectExpr(
-            "path", "modificationTime",
-            "element.type as element_type",
-            "element.content as content"
-        )
-        .filter("element_type IN ('text', 'title', 'section_header', 'table')"))
-
-# ============================================================
-# STAGE 4: ENRICH -- LLM classification, summarization, extraction
-# Replaces: Enrichment Service + Tagging Service + Embedding Service
-# ============================================================
-@dp.materialized_view(
-    comment="Documents enriched with LLM-generated summaries and classifications"
-)
-def enriched_documents():
-    return (spark.read.table("document_text")
-        .groupBy("path", "modificationTime")
-        .agg(expr("concat_ws('\\n', collect_list(content))").alias("full_text"))
-        .withColumn("summary", expr("""
-            ai_query('databricks-meta-llama-3-3-70b-instruct',
-                'Summarize in 3-5 sentences: ' || left(full_text, 4000),
-                modelParameters => named_struct('max_tokens', 500),
-                failOnError => false)
-        """))
-        .withColumn("category", expr("""
-            ai_classify(
-                left(full_text, 2000),
-                ARRAY('report', 'presentation', 'memo', 'proposal', 'technical', 'financial', 'marketing', 'legal', 'other')
-            )
-        """))
-        .withColumn("extracted_metadata", expr("""
-            ai_extract(
-                left(full_text, 4000),
-                ARRAY('title', 'author', 'key_topics'),
-                MAP('instructions', 'Extract these fields from the document.')
-            )
-        """)))
-
-# ============================================================
-# STAGE 5: SINK -- Write to Elasticsearch
-# Replaces: Custom ES writer service
-# ============================================================
-ES_HOST = "https://YOUR-ES-ENDPOINT.com"
-ES_INDEX = "documents"
-
-@dp.foreach_batch_sink(name="elasticsearch_sink")
-def write_to_elasticsearch(df, batch_id):
-    (df.write
-        .format("org.elasticsearch.spark.sql")
-        .option("es.nodes", ES_HOST)
-        .option("es.port", "443")
-        .option("es.net.ssl", "true")
-        .option("es.nodes.wan.only", "true")
-        .option("es.index.auto.create", "true")
-        .option("es.mapping.id", "doc_id")
-        .mode("append")
-        .save(ES_INDEX))
-
-@dp.append_flow(target="elasticsearch_sink")
-def es_output_flow():
-    return spark.readStream.table("enriched_documents")
+# MAGIC %md
+# MAGIC The Spark Declarative Pipeline is contained in the **`Vantage Pipeline`** folder.  Walk through the files to see how the concepts covered so far are leveraged in the declarative pipeline framework.
 
 # COMMAND ----------
 
@@ -282,7 +159,6 @@ def es_output_flow():
 # MAGIC
 # MAGIC This replaces the scattered CloudWatch metrics and custom DynamoDB counters you currently use to track document processing success rates.
 # MAGIC
-# MAGIC > **Presenter note:** Show the pipeline UI if possible (screenshot or live demo). The visual quality metrics are very compelling -- especially the pass/fail rates per expectation. Ask the audience: "How do you currently know if your parsing service is silently failing on certain document types?" With expectations, that answer is one click away in the pipeline UI.
 
 # COMMAND ----------
 
@@ -319,7 +195,6 @@ def es_output_flow():
 # MAGIC
 # MAGIC For a typical enterprise use case, **triggered mode on a schedule** (e.g., every 30 minutes) is likely the right starting point. Documents arrive throughout the day but do not need sub-second processing. You can always switch to continuous mode later without changing any code.
 # MAGIC
-# MAGIC > **Presenter note:** If you have a live workspace available, walk through creating the pipeline in the UI. Show the configuration screen. Emphasize that the entire deployment is: (1) point at a notebook, (2) set catalog and schema, (3) click Run. No CI/CD pipeline needed for the initial setup -- though of course you would add that for production. The contrast with deploying a new microservice (Docker build, ECR push, ECS task definition update, CloudFormation/Terraform) should be stark.
 
 # COMMAND ----------
 

@@ -5,14 +5,19 @@ from pyspark import pipelines as dp
 # Replaces: Custom ES writer service
 # Requires: environment.dependencies = ["elasticsearch"] in pipeline settings
 # ============================================================
-ES_HOST  = spark.conf.get("elasticsearch_host", "https://YOUR-ES-ENDPOINT.com")
-ES_INDEX = spark.conf.get("elasticsearch_index", "documents")
-serverless_api_key = dbutils.secrets.get("elasticsearch", "serverless_api_key")
+# Resolve secret at module level and store in Spark conf so the
+# foreach_batch handler can access it without referencing dbutils
+# (dbutils cannot be serialized by cloudpickle).
+spark.conf.set("_pipeline.es_api_key", dbutils.secrets.get("elasticsearch", "serverless_api_key"))
 
 @dp.foreach_batch_sink(name="elasticsearch_sink")
 def write_to_elasticsearch(df, batch_id):
     from elasticsearch import Elasticsearch, helpers
     import json
+
+    ES_HOST  = spark.conf.get("elasticsearch_host", "https://YOUR-ES-ENDPOINT.com")
+    ES_INDEX = spark.conf.get("elasticsearch_index", "documents")
+    api_key  = spark.conf.get("_pipeline.es_api_key")
 
     # VARIANT columns (ai_query with failOnError, ai_extract) cannot be
     # serialized by the ES client directly -- cast to JSON strings first
@@ -26,7 +31,7 @@ def write_to_elasticsearch(df, batch_id):
         "CAST(extracted_metadata AS STRING) AS extracted_metadata"
     )
 
-    es   = Elasticsearch(ES_HOST, api_key=serverless_api_key)
+    es   = Elasticsearch(ES_HOST, api_key=api_key)
     docs = []
     for row in df_clean.collect():
         source = row.asDict(recursive=True)

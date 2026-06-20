@@ -7,19 +7,19 @@ from pyspark.sql.functions import col, expr
 @dp.materialized_view(
     comment="Flattened document text ready for enrichment"
 )
-def p_document_text():
-    return (spark.read.table("p02_silver_parsed_documents")
-        .selectExpr(
-            "fileName",
-            "path",
-            "modificationTime",
-            "explode(try_cast(elements AS ARRAY<VARIANT>)) as element"
+def p03_gold_document_text():
+    return (spark.sql("""
+        SELECT
+            fileName,
+            concat_ws(' ', collect_list(chunk:chunk_to_retrieve::STRING)) AS text,
+            concat_ws(' ', collect_list(chunk:chunk_to_embed::STRING)) AS text_with_context
+        FROM (
+            SELECT
+                fileName,
+                chunk
+            FROM p02_silver_parsed_documents
+            LATERAL VIEW explode(ai_prep_search(parsed):document:contents::ARRAY<VARIANT>) AS chunk
         )
-        .selectExpr(
-            "fileName",
-            "path",
-            "modificationTime",
-            "try_cast(element:type AS STRING) as element_type",
-            "try_cast(element:content AS STRING) as content"
-        )
-        .filter("element_type IN ('text', 'title', 'section_header', 'table')"))
+        GROUP BY fileName
+""")
+)
