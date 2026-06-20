@@ -218,7 +218,7 @@ def write_to_elasticsearch(batch_df, batch_id):
 
 # Streaming write
 query = (spark.readStream
-    .table(f"{catalog}.{schema}.enriched_documents")
+    .table("03_gold_enriched_documents")
     .writeStream
     .foreachBatch(write_to_elasticsearch)
     .option("checkpointLocation", f"/Volumes/{catalog}/{schema}/{personal_volume}/checkpoints/es_sink")
