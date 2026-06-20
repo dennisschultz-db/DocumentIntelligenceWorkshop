@@ -1,0 +1,31 @@
+bundle:
+  name: vantage-pipeline
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: The Unity Catalog catalog for pipeline output
+  schema:
+    description: The Unity Catalog schema for pipeline output
+
+targets:
+  fevm-azure:
+    mode: development
+    workspace:
+      host: https://adb-7405609785664034.14.azuredatabricks.net
+      root_path: /Workspace/Users/dennis.schultz@databricks.com/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: dennis_schultz_azure_classic01
+      schema: ${workspace.current_user.short_name}
+
+  fevm-aws:
+    default: true
+    mode: development
+    workspace:
+      host: https://fevm-dennis-schultz-classic01.cloud.databricks.com/?o=7474660716592364
+      root_path: /Workspace/Users/dennis.schultz@databricks.com/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: dennis_schultz
+      schema: ${workspace.current_user.short_name}
