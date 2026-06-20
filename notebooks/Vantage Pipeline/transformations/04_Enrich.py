@@ -11,16 +11,19 @@ from pyspark.sql.functions import col, expr
     comment="Documents enriched with LLM-generated summaries and classifications"
 )
 def p03_gold_enriched_documents():
-    return (spark.sql("""
+    catalog = spark.conf.get("catalog", "dennis_schultz")
+    schema  = spark.conf.get("schema", "dennis_schultz")
+
+    return (spark.sql(f"""
         WITH enriched AS (
             SELECT
                 silver.fileName,
                 from_json(
-                    classify_document(silver.parsed),
+                    {catalog}.{schema}.classify_document(silver.parsed),
                     'STRUCT<response: STRING, error_message: STRING>') AS classified_output,
-                summarize_document(silver.parsed) AS summary,
-                extract_document(silver.parsed) AS metadata,
-                summarize_document_pig_latin(gold.text) AS summary_pig_latin
+                {catalog}.{schema}.summarize_document(silver.parsed) AS summary,
+                {catalog}.{schema}.extract_document(silver.parsed) AS metadata,
+                {catalog}.{schema}.summarize_document_pig_latin(gold.text) AS summary_pig_latin
             FROM p02_silver_parsed_documents silver
                 LEFT JOIN p03_gold_document_text gold
                     ON silver.fileName = gold.fileName
