@@ -13,7 +13,7 @@ from functools import reduce
 PAGE_RANGE_LIMIT = 500
 
 # ============================================================
-# Define a chunking function for long docs
+# Define a chunking function for long docs (module level for static analysis)
 def chunk_page_ranges(n_pages: int, chunk_size: int = PAGE_RANGE_LIMIT) -> list[str]:
     if n_pages is None or n_pages <= 0:
         return []
@@ -23,13 +23,16 @@ def chunk_page_ranges(n_pages: int, chunk_size: int = PAGE_RANGE_LIMIT) -> list[
     ]
 chunk_ranges_udf = udf(lambda n: chunk_page_ranges(n), ArrayType(StringType()))
 
-# Pre-computed literal ranges covering up to 5,000 pages (ai_parse_document requires literals)
+# Pre-computed literal ranges covering up to 5,000 pages.
+# ai_parse_document requires literal MAP values, so we generate all possible
+# page-range strings upfront. Ranges with no matching documents produce empty
+# DataFrames that are harmlessly unioned away.
 LITERAL_RANGES = chunk_page_ranges(5000, PAGE_RANGE_LIMIT)
 
 
 # ============================================================
 # Process short documents
-@dp.table(
+@dp.temporary_view(
     comment="SHORT parsed binary documents ingested from SharePoint"
 )
 def p02_silver_short_parsed():
@@ -66,7 +69,7 @@ def p02_silver_short_parsed():
 
 # ============================================================
 # Process long documents by chunking then merging
-@dp.table(
+@dp.temporary_view(
     comment="LONG parsed binary documents ingested from SharePoint"
 )
 def p02_silver_long_parsed():
@@ -86,7 +89,8 @@ def p02_silver_long_parsed():
         )
     )
 
-    # Parse each chunk with a literal pageRange value (ai_parse_document requires literals)
+    # Parse each chunk with a literal pageRange value (ai_parse_document requires literals).
+    # LITERAL_RANGES covers up to 5,000 pages; ranges with no matching rows are empty.
     parsed_dfs = [
         exploded
         .filter(col("page_range") == pr)
@@ -111,7 +115,7 @@ def p02_silver_long_parsed():
         "cast(parsed:error_status AS STRING) AS parse_error",
     )
 
-    # Merge chunks back per document using DataFrame API
+    # Merge chunks back per document
     return (
         long_per_chunk
         .filter("parse_error IS NULL")
@@ -147,4 +151,7 @@ def p02_silver_long_parsed():
 )
 def p02_silver_parsed_documents():
 
-    return spark.read.table("p02_silver_short_parsed").unionByName(spark.read.table("p02_silver_long_parsed"))
+    return (
+        spark.read.table("p02_silver_short_parsed")
+                .unionByName(spark.read.table("p02_silver_long_parsed"))
+    )
