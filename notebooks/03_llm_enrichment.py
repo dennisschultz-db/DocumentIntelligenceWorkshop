@@ -396,7 +396,7 @@ display(spark.sql(f"SELECT * FROM 03_gold_enriched_documents"))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### (Stretch): Multimodal -- Analyze Slide Images
+# MAGIC ### Multimodal -- Analyze Slide Images
 # MAGIC
 # MAGIC If you have slide images from the parsing step, send them to the vision model for analysis. This is optional -- skip if no images are available.
 
@@ -413,19 +413,24 @@ spark.sql(f"""
   CREATE OR REPLACE TABLE 03_gold_slide_analysis AS
   SELECT
     path,
-    ai_query(
-      '{vision_model}',
-      '{slide_prompt}',
-      files => content,
-      failOnError => false
-    ) AS slide_description
-  FROM read_files('{slide_images_path}', format => 'binaryFile')
+    slide_description.result AS slide_result
+  FROM (
+    SELECT
+      path,
+      ai_query(
+        '{vision_model}',
+        '{slide_prompt}',
+        files => content,
+        failOnError => false
+      ) AS slide_description
+    FROM read_files('{slide_images_path}', format => 'binaryFile')
+  )
 """)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Checkpoint
+# MAGIC # Checkpoint
 # MAGIC
 # MAGIC At this point you should have:
 # MAGIC - [x] `01_bronze_raw_documents` -- raw ingested binary content

@@ -67,7 +67,7 @@ serverless_api_key = dbutils.secrets.get("elasticsearch", "serverless_api_key")
 # COMMAND ----------
 
 # DBTITLE 1,Retrieve data to be written to Elasticsearch
-df_enriched = spark.table(f"{catalog}.{schema}.enriched_documents")
+df_enriched = spark.table("03_gold_enriched_documents")
 display(df_enriched)
 
 # COMMAND ----------
