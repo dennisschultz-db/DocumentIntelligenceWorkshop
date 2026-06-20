@@ -32,7 +32,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 1. Introduction to the SharePoint Connector
+# MAGIC ## 1. Introduction to the SharePoint Connector
 # MAGIC
 # MAGIC Databricks provides a **native Beta connector for SharePoint Online** (available on DBR 17.3+) through **Lakeflow Connect**. This connector gives you first-class support for reading files directly from SharePoint document libraries into Spark DataFrames.
 # MAGIC
@@ -55,11 +55,9 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 2. Batch Read from SharePoint
+# MAGIC ## 2. Batch Read from SharePoint
 # MAGIC
 # MAGIC The simplest way to read files from SharePoint is a batch read using `spark.read` with the `binaryFile` format. Each file becomes a row in the resulting DataFrame with its path, modification time, size, and binary content.
-# MAGIC
-# MAGIC > **Presenter note:** Replace `TENANT` and `SITE` with the actual tenant name and SharePoint site before running. The connection `sharepoint_conn` must already exist in Unity Catalog.
 
 # COMMAND ----------
 
@@ -82,7 +80,7 @@ display(df.select("fileName", "path", "modificationTime", "length", substring("c
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 3. File Type Filtering with `pathGlobFilter`
+# MAGIC ## 3. File Type Filtering with `pathGlobFilter`
 # MAGIC
 # MAGIC The `pathGlobFilter` option lets you control which file types are ingested at the source — before any data is loaded into memory.
 # MAGIC
@@ -118,7 +116,7 @@ display(df.select("fileName", "path", "modificationTime", "length", substring("c
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 4. SharePoint Metadata Exploration
+# MAGIC ## 4. SharePoint Metadata
 # MAGIC
 # MAGIC The SharePoint connector exposes a special `_sharepoint_metadata` struct column that contains rich metadata from the SharePoint API.
 # MAGIC
@@ -162,7 +160,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # DBTITLE 1,Cell 14
 # MAGIC %md
-# MAGIC ### 5. Auto Loader Introduction
+# MAGIC ## 5. Auto Loader Introduction
 # MAGIC
 # MAGIC **Auto Loader** (`cloudFiles` format) is Databricks' built-in solution for incrementally processing new files as they arrive. When combined with the SharePoint connector, it replaces the need for:
 # MAGIC
@@ -185,7 +183,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 6. Streaming Read with Auto Loader
+# MAGIC ## 6. Streaming Read with Auto Loader
 # MAGIC
 # MAGIC The code below sets up a streaming pipeline that:
 # MAGIC 1. Reads all existing files on the first run (full crawl)
@@ -200,7 +198,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 2 — Detect page count per PDF
+# MAGIC ### Detect page count per PDF
 # MAGIC
 # MAGIC Knowing the number of pages in PDF documents will be important when parsing documents in the next module.
 # MAGIC
@@ -245,7 +243,7 @@ display(spark.read.table(f"{catalog}.{schema}.01_bronze_raw_documents")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Incremental ingestion
+# MAGIC ### Incremental ingestion
 # MAGIC 1.  Drag a new file (pdf, pptx, or doc) into SharePoint
 # MAGIC 1.  Rerun the cell `Autoload files from SharePoint`
 # MAGIC 1.  Rerun the cell `Examine the Bronze table`.  Note there is one additional row.
@@ -253,7 +251,7 @@ display(spark.read.table(f"{catalog}.{schema}.01_bronze_raw_documents")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### 7. Full vs. Incremental Crawl
+# MAGIC ## 7. Full vs. Incremental Crawl
 # MAGIC
 # MAGIC Understanding how Auto Loader manages state is critical for building reliable pipelines.
 # MAGIC
@@ -278,7 +276,7 @@ display(spark.read.table(f"{catalog}.{schema}.01_bronze_raw_documents")
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC ### Recap
+# MAGIC ## Recap
 # MAGIC
 # MAGIC In this block you learned:
 # MAGIC
