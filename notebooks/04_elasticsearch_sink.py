@@ -26,6 +26,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Load shared config
 # MAGIC %run ./_resources/Config
 
 # COMMAND ----------
@@ -151,7 +152,7 @@ from pyspark.sql.functions import col, md5, get_json_object
 # The Maven driver does not support a variant data type.  Convert it to a string.
 (df_enriched
     .withColumn("category", get_json_object(col("category").cast("string"), "$.response[0]"))
-    .withColumn("doc_id", md5(col("path")))
+    .withColumn("doc_id", md5(col("fileName")))
     .write
     .format("org.elasticsearch.spark.sql")
     .option("es.nodes", elasticsearch_host)
