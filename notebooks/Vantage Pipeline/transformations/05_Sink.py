@@ -19,29 +19,32 @@ def write_to_elasticsearch(df, batch_id):
     ES_INDEX = spark.conf.get("elasticsearch_index", "documents")
     api_key  = spark.conf.get("_pipeline.es_api_key")
 
-    # VARIANT columns (ai_query with failOnError, ai_extract) cannot be
-    # serialized by the ES client directly -- cast to JSON strings first
+    # Select only columns available in p03_gold_enriched_documents
     df_clean = df.selectExpr(
-        "fileName", 
-        "path", 
-        "modificationTime", 
-        "full_text", 
+        "fileName",
         "category",
+        "error_message",
+        "title",
+        "company",
+        "product",
+        "author",
+        "date",
+        "CAST(key_topics AS STRING) AS key_topics",
         "CAST(summary AS STRING) AS summary",
-        "CAST(extracted_metadata AS STRING) AS extracted_metadata"
+        "summary_pig_latin"
     )
 
     es   = Elasticsearch(ES_HOST, api_key=api_key)
     docs = []
     for row in df_clean.collect():
         source = row.asDict(recursive=True)
-        for field in ("summary", "extracted_metadata"):
+        for field in ("summary", "key_topics"):
             if source.get(field):
                 try:
                     source[field] = json.loads(source[field])
                 except (ValueError, TypeError):
                     pass
-        docs.append({"_index": ES_INDEX, "_id": source["path"], "_source": source})
+        docs.append({"_index": ES_INDEX, "_id": source["fileName"], "_source": source})
     if docs:
         helpers.bulk(es, docs)
 
