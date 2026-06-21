@@ -22,4 +22,4 @@ def p03_gold_document_text():
         )
         GROUP BY fileName
 """)
-)
+    )

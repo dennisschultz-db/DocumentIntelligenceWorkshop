@@ -1,0 +1,36 @@
+resources:
+  pipelines:
+    vantage_pipeline:
+      name: Vantage Pipeline
+      catalog: ${var.catalog}
+      target: ${var.schema}
+
+      libraries:
+        - glob:
+            include: ../transformations/**
+  
+      environment:
+        dependencies:
+          - elasticsearch
+          - pypdf==4.3.1
+        environment_version: "4"
+      serverless: true
+      photon: true
+      development: true
+      channel: current
+      edition: ADVANCED
+
+      configuration:
+        "sharepoint.connector": vantage_demo_sharepoint_connection
+        "sharepoint.site": "https://databricksinc.sharepoint.com/sites/VantageDemo/Shared%20Documents/Forms/AllItems.aspx"
+        volume: my_data
+        catalog: ${var.catalog}
+        schema: ${var.schema}
+        elasticsearch_host: "https://my-elasticsearch-project-c1579c.es.us-east-1.aws.elastic.cloud"
+        elasticsearch_index: vantage_demo_pipeline
+        page_range_limit: "500"
+        max_page_count: "5000"
+
+      permissions:
+           - level: CAN_RUN
+             group_name: users
