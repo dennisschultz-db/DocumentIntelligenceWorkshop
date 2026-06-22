@@ -8,7 +8,6 @@
 # ///
 # MAGIC %md
 # MAGIC # Block 2: SharePoint Ingestion
-# MAGIC **Day 1 | 9:45 - 11:00 AM**
 # MAGIC
 # MAGIC ---
 # MAGIC
