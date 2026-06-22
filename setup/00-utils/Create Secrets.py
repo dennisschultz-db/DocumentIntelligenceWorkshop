@@ -64,9 +64,6 @@ password_val = dbutils.widgets.get("password")
 api_key_val  = dbutils.widgets.get("api_key")
 group_name   = dbutils.widgets.get("group_name")
 
-if not all([username_val, password_val, api_key_val, group_name]):
-    raise ValueError("Fill in all widget fields before running this cell.")
-
 
 # COMMAND ----------
 
@@ -87,10 +84,11 @@ except Exception as e:
 
 # DBTITLE 1,Ceate secrets
 # --- Step 2: Set the three secrets ---
-for key, val in [("username", username_val), ("password", password_val), ("api_key", api_key_val)]:
-    w.secrets.put_secret(scope="elasticsearch", key=key, string_value=val)
-    print(f"Set secret: {key}")
+# for key, val in [("username", username_val), ("password", password_val), ("api_key", api_key_val)]:
+#     w.secrets.put_secret(scope="elasticsearch", key=key, string_value=val)
+#     print(f"Set secret: {key}")
 
+w.secrets.put_secret(scope="elasticsearch", key="api_key", string_value=api_key_val)
 
 # COMMAND ----------
 
