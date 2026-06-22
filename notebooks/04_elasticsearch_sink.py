@@ -3,7 +3,7 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # dependencies = [
-#   "elasticsearch",
+#   "elasticsearch8",
 # ]
 # ///
 # MAGIC %md
@@ -56,9 +56,7 @@
 
 # DBTITLE 1,Retrieve secrets
 # Read secrets
-username = dbutils.secrets.get("elasticsearch", "username")
-password = dbutils.secrets.get("elasticsearch", "password")
-serverless_api_key = dbutils.secrets.get("elasticsearch", "serverless_api_key")
+api_key = dbutils.secrets.get("elasticsearch", "api_key")
 
 # COMMAND ----------
 
@@ -96,18 +94,16 @@ actions = [
 # MAGIC - **Fine-grained control** over document structure, routing, or custom pipelines
 # MAGIC - **Index management operations** (create/delete indices, update mappings, etc.)
 # MAGIC
-# MAGIC The trade-off is that all work happens on the driver node, so it won't scale as well for very large datasets.
-# MAGIC
-# MAGIC > **Presenter note:** Point out the trade-off -- the Spark connector distributes writes across executors, while the Python client runs entirely on the driver. For our document volumes (thousands, not millions), both approaches work fine.
+# MAGIC The trade-off is that all work happens on the driver node, so it won't scale as well for very large datasets. The Spark connector distributes writes across executors, while the Python client runs entirely on the driver. For our document volumes in this workshop, both approaches work fine.
 
 # COMMAND ----------
 
-# MAGIC %pip install elasticsearch
+# MAGIC %pip install elasticsearch8
 
 # COMMAND ----------
 
 # DBTITLE 1,Write to Elasticsearch
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch8 import Elasticsearch, helpers
 
 # Connect to Elasticsearch
 es = Elasticsearch(
@@ -116,7 +112,7 @@ es = Elasticsearch(
     #     username,
     #     password
     # ),
-    api_key=serverless_api_key,
+    api_key=api_key,
     verify_certs=True
 )
 
@@ -138,10 +134,12 @@ print(f"Indexed {success} documents, {len(errors)} errors")
 # MAGIC - Supports **document-level upserts** via `es.mapping.id` -- if a document with the same ID already exists, it gets updated rather than duplicated
 # MAGIC - Works with both batch and structured streaming via `foreachBatch`
 # MAGIC
-# MAGIC **_Note_** - Installing Maven libraries is not supported on Databricks Serverless compute.  To use this approach, you must use a Classic compute cluster.
+# MAGIC The es-hadoop connector treats ES as just another Spark data sink. You already know `.write.format(...)` from writing to Delta -- same pattern, different format string.
 # MAGIC
+# MAGIC > **_Note_** - Installing Maven libraries is not supported on Databricks Serverless compute.  To use this approach, you must use a Classic compute cluster.  You must also match the cluster versions with the available Maven libraries.  
+# MAGIC >
+# MAGIC > The nearest match for Elasticsearch `8.19.16` is the library `org.elasticsearch:elasticsearch-spark-30_2.12:8.9.0` which is compatible with Databricks Runtime `16.4 LTS (includes Apache Spark 3.5.2, Scala 2.12)`.
 # MAGIC
-# MAGIC > **Presenter note:** Emphasize that the es-hadoop connector treats ES as just another Spark data sink. Students already know `.write.format(...)` from writing to Delta -- same pattern, different format string.
 
 # COMMAND ----------
 
@@ -160,7 +158,7 @@ from pyspark.sql.functions import col, md5, get_json_object
     .option("es.net.ssl", "true")
     # .option("es.net.http.auth.user", elasticsearch_username)
     # .option("es.net.http.auth.pass", elasticsearch_password)
-    .option("es.net.http.header.Authorization", f"ApiKey {serverless_api_key}")
+    .option("es.net.http.header.Authorization", f"ApiKey {api_key}")
     .option("es.nodes.wan.only", "true")
     .option("es.nodes.discovery", "false")
     .option("es.index.auto.create", "true")
@@ -182,7 +180,7 @@ print(f"Written {df_enriched.count()} documents to Elasticsearch index '{elastic
 # MAGIC | `es.index.auto.create` | `true` | Automatically creates the index if it doesn't exist. Convenient for development; in production you may want to pre-create the index with a specific mapping. |
 # MAGIC | `mode("append")` | -- | Adds documents to the existing index. Use `"overwrite"` to **replace the entire index** (deletes and recreates it). |
 # MAGIC
-# MAGIC > **Presenter note:** Walk through `es.mapping.id` carefully. This is the key to making writes idempotent. Without it, every run would create duplicate documents. With it, the connector performs an upsert based on the `doc_id` column.
+# MAGIC > **Note:** The `es.mapping.id` option is the key to making writes idempotent. Without it, every run would create duplicate documents. With it, the connector performs an upsert based on the `doc_id` column.
 
 # COMMAND ----------
 
@@ -200,7 +198,7 @@ def write_to_elasticsearch(batch_df, batch_id):
     """Write a micro-batch to Elasticsearch"""
     (batch_df
         .withColumn("category", get_json_object(col("category").cast("string"), "$.response[0]"))
-        .withColumn("doc_id", md5(col("path")))
+        .withColumn("doc_id", md5(col("fileName")))
         .write
         .format("org.elasticsearch.spark.sql")
         .option("es.nodes", elasticsearch_host)
@@ -208,7 +206,7 @@ def write_to_elasticsearch(batch_df, batch_id):
         .option("es.net.ssl", "true")
         # .option("es.net.http.auth.user", elasticsearch_username)
         # .option("es.net.http.auth.pass", elasticsearch_password)
-        .option("es.net.http.header.Authorization", f"ApiKey {serverless_api_key}")
+        .option("es.net.http.header.Authorization", f"ApiKey {api_key}")
         .option("es.nodes.wan.only", "true")
         .option("es.nodes.discovery", "false")
         .option("es.index.auto.create", "true")
@@ -249,4 +247,4 @@ query.awaitTermination()
 # MAGIC 3. **You can rebuild the ES index at any time** by re-reading from Delta. This makes recovery from index corruption or schema changes straightforward.
 # MAGIC 4. **The `foreachBatch` streaming pattern keeps ES in sync automatically.** As new or updated documents land in the Delta table, they flow through to Elasticsearch with minimal latency.
 # MAGIC
-# MAGIC > **Presenter note:** This is a good moment to reinforce the medallion architecture concept. Delta is the gold layer; Elasticsearch is a serving layer on top of it. If ES goes down or gets corrupted, you haven't lost any data -- just re-sync from Delta.
+# MAGIC > **The medallion architecture:** Delta is the gold layer; Elasticsearch is a serving layer on top of it. If ES goes down or gets corrupted, you haven't lost any data -- just re-sync from Delta.
