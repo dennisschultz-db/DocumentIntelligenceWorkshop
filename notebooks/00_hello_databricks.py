@@ -22,16 +22,15 @@
 # MAGIC
 # MAGIC ## Two-Day Agenda Overview
 # MAGIC
-# MAGIC | Block | Time | Topic |
-# MAGIC |-------|------|-------|
-# MAGIC | **Day 1, Block 1** | 8:00 - 9:30 | **Foundations** — Platform tour, Delta Lake, Medallion Architecture (you are here) |
-# MAGIC | **Day 1, Block 2** | 10:00 - 12:00 | **Ingestion** — SharePoint connector, Auto Loader, Bronze layer |
-# MAGIC | **Day 1, Block 3** | 1:00 - 3:00 | **Parsing & Enrichment** — Document parsing, LLM enrichment, Silver/Gold layers |
-# MAGIC | **Day 1, Block 4** | 3:30 - 5:00 | **Orchestration** — Lakeflow Declarative Pipelines, end-to-end pipeline |
-# MAGIC | **Day 2, Block 5** | 8:00 - 10:00 | **Search & Serving** — Elasticsearch sync, vector search, serving endpoints |
-# MAGIC | **Day 2, Block 6** | 10:30 - 12:00 | **Production Readiness** — Monitoring, governance, cost analysis |
-# MAGIC | **Day 2, Block 7** | 1:00 - 3:00 | **Advanced Topics** — Custom models, feedback loops, edge cases |
-# MAGIC | **Day 2, Block 8** | 3:30 - 5:00 | **Wrap-Up** — Architecture review, roadmap discussion, next steps |
+# MAGIC | Block | Topic |
+# MAGIC |-------|-------|
+# MAGIC | **Day 1, Block 1** | **Foundations** — Platform tour, Delta Lake, Medallion Architecture (you are here) |
+# MAGIC | **Day 1, Block 2** | **Ingestion** — SharePoint connector, Auto Loader, Bronze layer |
+# MAGIC | **Day 1, Block 3** | **Parsing** — Document parsing, Silver layer |
+# MAGIC   **Day 1, Block 4** | **Enrichment** - Using LLMs to enrich document data, Gold layer |
+# MAGIC | **Day 1, Block 5** | **Output** - Sink data into Elasticsearch |
+# MAGIC | **Day 2, Block 6** | **Orchestration** — Lakeflow Declarative Pipelines, end-to-end pipeline |
+# MAGIC | **Day 2, Block 7** | **Hackathon** — Apply what we have learned |
 # MAGIC
 # MAGIC ## What We Will Build
 # MAGIC
@@ -47,7 +46,7 @@
 # MAGIC
 # MAGIC All of this will run as a single, declarative pipeline on Databricks — no queues, no microservices, no glue code.
 # MAGIC
-# MAGIC > **Presenter note:** Emphasize that participants do not need prior Databricks experience. Everything will be guided step by step. Encourage questions at any point.
+# MAGIC > Participants do not need prior Databricks experience. Everything will be guided step by step. Questions are encouraged at any point.
 
 # COMMAND ----------
 
@@ -89,9 +88,9 @@
 # MAGIC | 8+ microservices | Notebook functions within a single pipeline |
 # MAGIC | CloudWatch + X-Ray | Built-in pipeline monitoring + Databricks SQL dashboards |
 # MAGIC
-# MAGIC ![Databricks Data Intelligence Platform](./images/platform_overview.png)
+# MAGIC ![Databricks Data Intelligence Platform](./images/DatabricksPlatform.png)
 # MAGIC
-# MAGIC > **Presenter note:** Spend time on this comparison. Acknowledge that their current architecture was built thoughtfully and has been effective. The goal is to show how a platform approach can reduce operational overhead by consolidating many components into fewer, more integrated ones. Ask participants which consolidation opportunities are most interesting to them.
+# MAGIC > **Goal:** Show how a platform approach can reduce operational overhead by consolidating many components into fewer, more integrated ones. Ask participants which consolidation opportunities are most interesting to them.
 
 # COMMAND ----------
 
@@ -132,7 +131,8 @@
 # MAGIC For this workshop, our hierarchy looks like:
 # MAGIC ```
 # MAGIC workshop                        <-- Catalog
-# MAGIC   --> default                    <-- Schema
+# MAGIC   --> vantage_workshop          <-- Shared Schema
+# MAGIC   --> <username>                <-- Personal Schema
 # MAGIC       --> documents (Volume)     <-- Where raw files live
 # MAGIC       --> images (Volume)        <-- Workshop images
 # MAGIC       --> bronze_documents       <-- Table (we will create this)
@@ -151,7 +151,6 @@
 # MAGIC
 # MAGIC ![Databricks Platform Architecture](./images/platform_aws_governance.png)
 # MAGIC
-# MAGIC > **Presenter note:** Do a live walkthrough of the workspace. Open Catalog Explorer and show the `workshop` catalog. Navigate into the `default` schema and show the Volumes. Have participants follow along and confirm they can see the same assets. If anyone cannot see the catalog, check their permissions before proceeding.
 
 # COMMAND ----------
 
@@ -192,7 +191,7 @@
 # MAGIC
 # MAGIC This consolidation is one of the key benefits of the platform approach: fewer moving parts means fewer potential failure points and simpler operational management.
 # MAGIC
-# MAGIC > **Presenter note:** This is a key insight for the group. The idea that the table itself can serve as storage, signaling layer, and state tracker is a fundamental simplification. In a traditional architecture, these are three separate systems (object store, message queue, state database). With Delta Lake, they converge into one.
+# MAGIC > In a traditional architecture, storage, signaling layer, and state tracker are three separate systems (object store, message queue, state database). With Delta Lake, they converge into one.
 
 # COMMAND ----------
 
@@ -203,10 +202,11 @@
 # MAGIC The **Medallion Architecture** is a design pattern for organizing data in a lakehouse. It uses three layers — Bronze, Silver, and Gold — to progressively refine raw data into business-ready assets.
 # MAGIC
 # MAGIC This maps directly to your document processing flow.
+# MAGIC ![Medallion Architecture](./images/MedallionArchitecture.png)
 # MAGIC
 # MAGIC ## Bronze Layer: Raw Ingestion
 # MAGIC
-# MAGIC **What it holds:** Raw documents exactly as they arrive from SharePoint — PDFs, Word docs, images, metadata. Nothing is transformed or parsed yet.
+# MAGIC **What it holds:** Raw documents in binary form exactly as they arrive from SharePoint — PDFs, Word docs, images, metadata. Nothing is transformed or parsed yet.
 # MAGIC
 # MAGIC **Databricks equivalent of:**
 # MAGIC - S3 staging bucket where raw documents land
@@ -266,7 +266,6 @@
 # MAGIC
 # MAGIC Each arrow is a **Delta table read/write** — the data flow is managed entirely through table operations.
 # MAGIC
-# MAGIC > **Presenter note:** Walk through the diagram and map each layer to the corresponding components in their existing system. The goal is to show how the Medallion Architecture provides a clear, structured way to organize the same processing stages they already have, with fewer operational components to manage.
 
 # COMMAND ----------
 
@@ -302,17 +301,16 @@
 # MAGIC - **Managed checkpointing** — state tracking for which files have been processed is handled by the framework
 # MAGIC - **Scales seamlessly** — handles everything from a handful of files to millions without configuration changes
 # MAGIC
-# MAGIC > **Presenter note:** Keep this section brief — it is a conceptual introduction. We will get hands-on with Auto Loader in Block 2. The key takeaway is that Auto Loader consolidates file detection, event handling, and state tracking into a single managed capability.
 
 # COMMAND ----------
 
 # DBTITLE 1,Cell 7
 # MAGIC %md
-# MAGIC # Lakeflow Declarative Pipelines: Replacing Step Functions
+# MAGIC # Lakeflow Spark Declarative Pipelines (SDP)
 # MAGIC
 # MAGIC ## A Declarative Approach to Orchestration
 # MAGIC
-# MAGIC Orchestrating multi-step data workflows is one of the more complex aspects of any pipeline. **Lakeflow Declarative Pipelines** offer a different paradigm: instead of defining explicit state transitions and routing logic, you **declare the desired outcome** and let the framework handle execution order, dependencies, and error handling.
+# MAGIC Orchestrating multi-step data workflows is one of the more complex aspects of any pipeline. **Lakeflow Spark Declarative Pipelines** offer a different paradigm: instead of defining explicit state transitions and routing logic, you **declare the desired outcome** and let the framework handle execution order, dependencies, and error handling.
 # MAGIC
 # MAGIC ## How It Works
 # MAGIC
@@ -320,21 +318,21 @@
 # MAGIC
 # MAGIC ```python
 # MAGIC # This is what a Lakeflow Declarative Pipeline looks like (we will build this in Block 4)
-# MAGIC import dlt
+# MAGIC import dp
 # MAGIC
-# MAGIC @dlt.table(comment="Raw documents from SharePoint")
+# MAGIC @dp.table(comment="Raw documents from SharePoint")
 # MAGIC def bronze_documents():
 # MAGIC     return (spark.readStream.format("cloudFiles")
 # MAGIC         .option("cloudFiles.format", "binaryFile")
 # MAGIC         .load("/Volumes/workshop/default/documents/"))
 # MAGIC
-# MAGIC @dlt.table(comment="Parsed document content")
+# MAGIC @dp.table(comment="Parsed document content")
 # MAGIC def silver_parsed():
-# MAGIC     return dlt.read_stream("bronze_documents").withColumn("text", parse_document("content"))
+# MAGIC     return dp.read_stream("bronze_documents").withColumn("text", parse_document("content"))
 # MAGIC
-# MAGIC @dlt.table(comment="Enriched with LLM summaries and tags")
+# MAGIC @dp.table(comment="Enriched with LLM summaries and tags")
 # MAGIC def gold_enriched():
-# MAGIC     return dlt.read_stream("silver_parsed").withColumn("summary", call_llm("text"))
+# MAGIC     return dp.read_stream("silver_parsed").withColumn("summary", call_llm("text"))
 # MAGIC ```
 # MAGIC
 # MAGIC **Key features:**
@@ -350,7 +348,6 @@
 # MAGIC - **Testable** — standard Python functions that you can unit test with familiar tools
 # MAGIC - **Full visibility** — the pipeline UI shows exactly where data is flowing and where any issues occur
 # MAGIC
-# MAGIC > **Presenter note:** Keep this brief — we will build the full pipeline in Block 4. The key insight is the shift from **imperative orchestration** (explicitly defining each step, transition, and error path) to **declarative pipelines** (declaring the desired tables and their derivations, letting the framework manage the rest).
 
 # COMMAND ----------
 
@@ -359,7 +356,6 @@
 # MAGIC
 # MAGIC Now let's run some code to make sure everything is set up correctly. Run each cell below by pressing **Shift+Enter** or clicking the play button.
 # MAGIC
-# MAGIC > **Presenter note:** Walk around the room and make sure everyone can execute cells. This is often where cluster attachment issues surface. If someone cannot run cells, check that their cluster is running and that the notebook is attached to it.
 
 # COMMAND ----------
 
@@ -370,8 +366,6 @@ print("Hello, Databricks!")
 
 # MAGIC %md
 # MAGIC If you see `Hello, Databricks!` printed above, your notebook is connected to a running cluster and ready to go.
-# MAGIC
-# MAGIC Now let's explore the data catalog. The next cell uses **`%sql`** — a magic command that tells Databricks to run this cell as SQL instead of Python.
 
 # COMMAND ----------
 
@@ -382,6 +376,11 @@ print("Hello, Databricks!")
 # COMMAND ----------
 
 # MAGIC %run ./_resources/Config
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Now let's explore the data catalog. The next cell uses **`%sql`** — a magic command that tells Databricks to run this cell as SQL instead of Python.
 
 # COMMAND ----------
 
@@ -405,7 +404,7 @@ spark.sql('SHOW SCHEMAS').display();
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC You should see the **`00_shared`** schema. This contains tables and volumes that have been provided.
+# MAGIC You should see the **`vantage_workshop`** schema. This contains tables and volumes that have been provided.
 # MAGIC
 # MAGIC Next, let's look at the files we will be processing. **Volumes** in Unity Catalog are how Databricks manages unstructured files (PDFs, images, etc.) — similar to S3 buckets but with governance and access control built in.
 
@@ -437,12 +436,11 @@ display(dbutils.fs.ls(f"/Volumes/{catalog}/{shared_schema}/{test_documents_volum
 # MAGIC - **Lakeflow Declarative Pipelines**: Declarative pipeline definition in a single Python file
 # MAGIC - **Hands-on verification**: Confirmed our environment is working
 # MAGIC
-# MAGIC ## Up Next: Block 2 — Ingestion (10:00 - 12:00)
+# MAGIC ## Up Next: Block 2 — Ingestion
 # MAGIC
 # MAGIC In the next block, we will:
 # MAGIC 1. Connect to SharePoint and pull documents into Databricks
 # MAGIC 2. Set up Auto Loader for incremental file processing
 # MAGIC 3. Build the Bronze layer of our Medallion Architecture
 # MAGIC
-# MAGIC Take a short break and we will reconvene at 10:00.
 # MAGIC
