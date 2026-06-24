@@ -9,7 +9,7 @@
 # MAGIC %md
 # MAGIC # Writing Enriched Data to Elasticsearch
 # MAGIC
-# MAGIC **Block 5 — Elasticsearch Sink (Day 2, 9:45-10:05)**
+# MAGIC **Block 5 — Elasticsearch Sink**
 # MAGIC
 # MAGIC This is the final step in our pipeline: writing enriched content to Elasticsearch so it can be searched by downstream applications.
 # MAGIC
@@ -22,7 +22,7 @@
 # MAGIC
 # MAGIC **Key architectural principle:** Delta tables remain the **primary store** (source of truth). Elasticsearch serves as a **search index** that can be rebuilt at any time from the Delta tables.
 # MAGIC
-# MAGIC > **Prerequisite:** The `elasticsearch-spark` (es-hadoop) connector must be installed on the cluster as a Maven library. It is pre-installed on our workshop cluster.
+# MAGIC > **Prerequisite:** The `elasticsearch-spark` (es-hadoop) connector must be installed on the cluster as a Maven library.
 
 # COMMAND ----------
 

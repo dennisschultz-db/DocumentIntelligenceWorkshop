@@ -14,22 +14,22 @@
 # MAGIC - **Document Parsing**: Used Databricks Document Intelligence to parse PDFs, slides, and images into structured elements
 # MAGIC
 # MAGIC ### What we're building today (Day 2):
-# MAGIC | Block | Topic | Time |
-# MAGIC |-------|-------|------|
-# MAGIC | **Block 4** | **LLM Enrichment** (this notebook) | 8:15 - 9:30 |
-# MAGIC | Block 5 | Full Pipeline Assembly with DLT | 9:45 - 11:00 |
-# MAGIC | Block 6 | Elasticsearch & Search Integration | 11:15 - 12:30 |
-# MAGIC | Block 7 | Hackathon: Build Your Pipeline | 1:30 - 4:00 |
+# MAGIC | Block | Topic |
+# MAGIC |-------|------|
+# MAGIC | **Block 4** | **LLM Enrichment** (this notebook)
+# MAGIC | Block 5 | Elasticsearch & Search Integration
+# MAGIC | Block 6 | Full Pipeline Assembly with SDP
+# MAGIC | Block 7 | Hackathon: Build Your Pipeline
 # MAGIC
 # MAGIC ### Where we left off
-# MAGIC Our parsed documents are stored in `workshop.default.parsed_documents`. Each row contains the file path and a JSON structure of parsed elements (text, titles, section headers, tables, images, etc.).
+# MAGIC Our parsed documents are stored in `<catalog>.<username>.02_silver_parsed_documents`. Each row contains the file path and a JSON structure of parsed elements (text, titles, section headers, tables, images, etc.).
 # MAGIC
 # MAGIC **Today's goal**: Take those parsed documents and enrich them with AI-generated summaries, classifications, structured metadata, and image analysis -- then assemble everything into a production pipeline.
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Part 1: Databricks AI Functions for Enrichment (Guided, 30 min)
+# MAGIC # Part 1: Databricks AI Functions for Enrichment
 # MAGIC
 # MAGIC ## Overview of Databricks AI Functions
 # MAGIC
@@ -46,6 +46,7 @@
 # MAGIC | `ai_query()` | General-purpose LLM calls with optional structured output | Summarization, Q&A, custom prompts |
 # MAGIC | `ai_classify()` | Classify text into predefined categories | Document type tagging |
 # MAGIC | `ai_extract()` | Extract structured fields from text | Metadata extraction (author, date, topics) |
+# MAGIC | `ai_prep_search()` | Transforms the structured output of ai_parse_document into an optimized format | RAG vector search and information retrieval systems |
 # MAGIC | `ai_summarize()` | Generate summaries | Executive summaries |
 # MAGIC | `ai_similarity()` | Compute semantic similarity between texts | Duplicate detection |
 # MAGIC | `ai_translate()` | Translate text between languages | Multilingual support |
@@ -224,7 +225,7 @@ display(spark.sql(f"""
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC # Part 2: Reusable Enrichment Functions (Guided, 15 min)
+# MAGIC # Part 2: Reusable Enrichment Functions
 # MAGIC
 # MAGIC ## SQL UDFs as Reusable Enrichment Steps
 # MAGIC

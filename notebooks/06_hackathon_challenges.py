@@ -9,21 +9,11 @@
 
 # MAGIC %md
 # MAGIC # Block 6: Hackathon Challenges
-# MAGIC **Day 2 | 10:45 - 12:00 (1 hour 15 minutes)**
+# MAGIC **Day 2**
 # MAGIC
 # MAGIC ---
 # MAGIC
-# MAGIC ## Instructions
-# MAGIC
-# MAGIC Welcome to the hackathon! Here's how to make the most of it:
-# MAGIC
-# MAGIC - **Time:** You have **1 hour 15 minutes** of hands-on building time
-# MAGIC - **Teams:** Work **individually or in small teams** -- your choice
-# MAGIC - **Scope:** Pick **1-2 challenges** that interest you most. Depth beats breadth here
-# MAGIC - **Help:** Facilitators are circulating -- raise your hand or flag us down with questions
-# MAGIC - **Sharing:** You'll have **2 minutes to demo** what you built when we reconvene at 12:00
-# MAGIC
-# MAGIC ### Challenge Overview
+# MAGIC ### Challenge Ideas
 # MAGIC
 # MAGIC | # | Challenge | Difficulty | Focus Area |
 # MAGIC |---|-----------|------------|------------|

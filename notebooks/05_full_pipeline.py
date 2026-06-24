@@ -25,7 +25,6 @@
 # MAGIC - **Incremental processing** -- each run only processes new data, not the entire dataset
 # MAGIC - **Schema evolution** -- upstream schema changes are handled gracefully, not silently dropped
 # MAGIC
-# MAGIC ![Lakeflow Pipeline Architecture](./images/managed_ingestion_arch.png)
 # MAGIC
 # MAGIC ![Bronze Tables Pipeline](./images/bronze_tables_pipeline.png)
 # MAGIC
@@ -119,7 +118,7 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC The Spark Declarative Pipeline is contained in the **`Vantage Pipeline`** folder.  Walk through the files to see how the concepts covered so far are leveraged in the declarative pipeline framework.
+# MAGIC The Spark Declarative Pipeline is contained in the **`bundles/vantage-pipeline`** folder.  Walk through the files to see how the concepts covered so far are leveraged in the declarative pipeline framework.
 
 # COMMAND ----------
 
@@ -164,42 +163,6 @@
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC ## Deploying and Running the Pipeline
-# MAGIC
-# MAGIC Now that we have the pipeline code, here is how to deploy and run it:
-# MAGIC
-# MAGIC ### Step 1: Save this notebook as a pipeline source
-# MAGIC This notebook (or a standalone `.py` file with the same code) becomes the **pipeline source**. No packaging, no Docker containers, no deployment scripts.
-# MAGIC
-# MAGIC ### Step 2: Create a Lakeflow pipeline in the Databricks UI
-# MAGIC 1. Navigate to **Pipelines** in the left sidebar
-# MAGIC 2. Click **Create Pipeline**
-# MAGIC 3. Select this notebook as the source
-# MAGIC 4. Configure the pipeline settings
-# MAGIC
-# MAGIC ### Step 3: Pipeline Settings
-# MAGIC
-# MAGIC | Setting | Value | Notes |
-# MAGIC |---|---|---|
-# MAGIC | **Catalog** | `workshop` | Where the output tables are created |
-# MAGIC | **Target Schema** | `default` | Schema within the catalog |
-# MAGIC | **Compute** | Serverless or assigned cluster | Serverless is recommended for variable workloads |
-# MAGIC | **Channel** | `current` or `preview` | Use `preview` for latest features |
-# MAGIC
-# MAGIC ### Step 4: Choose a Run Mode
-# MAGIC
-# MAGIC | Mode | Behavior | Best For |
-# MAGIC |---|---|---|
-# MAGIC | **Triggered (batch)** | Processes all available data, then stops | Scheduled runs (e.g., every hour, nightly) |
-# MAGIC | **Continuous (streaming)** | Runs indefinitely, processing data as it arrives | Near-real-time requirements (sub-minute latency) |
-# MAGIC
-# MAGIC For a typical enterprise use case, **triggered mode on a schedule** (e.g., every 30 minutes) is likely the right starting point. Documents arrive throughout the day but do not need sub-second processing. You can always switch to continuous mode later without changing any code.
-# MAGIC
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ---
 # MAGIC ## Architecture Question: Single Pipeline vs. Per-Source
 # MAGIC
 # MAGIC A common question at this point is: "What if we have multiple data sources? Do we need a separate pipeline for each one?"
@@ -237,7 +200,6 @@
 # MAGIC
 # MAGIC This mirrors a pattern you already use: your current microservices have shared downstream processing (enrichment, Elasticsearch) fed by multiple upstream triggers. The difference is that this pattern is expressed in 10 lines of code instead of 10 infrastructure components.
 # MAGIC
-# MAGIC > **Presenter note:** This is a natural architecture discussion point. Let the audience debate for a few minutes. Some teams prefer full isolation (Option B) for operational simplicity. Others prefer shared downstream (Option A) for code reuse. There is no wrong answer, but Option A is typically better for organizations with many similar sources feeding the same enrichment and search pipeline -- which is exactly the situation for organizations with diverse document sources.
 
 # COMMAND ----------
 
@@ -285,7 +247,6 @@
 # MAGIC
 # MAGIC This enables you to build custom alerts, integrate with PagerDuty or Slack, or feed metrics into your existing monitoring stack.
 # MAGIC
-# MAGIC > **Presenter note:** If you have a running pipeline, show the DAG view now. Click into a table node and show the row counts and expectations metrics. Click into the event log and show a failed run with its error message. The visual impact of seeing the entire pipeline health at a glance -- versus logging into AWS Console and clicking through CloudWatch, SQS, and DynamoDB separately -- is the final proof point. End this section by saying: "This is one Python file. This is one UI. This is the entire system."
 
 # COMMAND ----------
 
@@ -301,7 +262,3 @@
 # MAGIC 4. **Deployment** -- save a notebook, create a pipeline, click Run
 # MAGIC 5. **Architecture patterns** -- single pipeline with shared downstream stages vs. per-source pipelines
 # MAGIC 6. **Monitoring** -- DAG visualization, event logs, quality metrics, and system tables
-# MAGIC
-# MAGIC **The core message:** A single Python file with five decorated functions replaces ~20 AWS components (Lambda functions, SQS queues, Step Functions, DynamoDB tables, CloudWatch alarms, and custom microservices). The pipeline is easier to write, easier to debug, easier to monitor, and easier to evolve.
-# MAGIC
-# MAGIC > **Presenter note:** Let this sink in. Ask the room: "How long would it take to add a new enrichment step -- say, language detection -- to your current system?" (Answer: new service, new queue, new Lambda trigger, new DynamoDB table, CloudFormation update, testing, deployment -- days to weeks.) "How long in this pipeline?" (Answer: add a `.withColumn()` call to the `enriched_documents` function -- minutes.) That contrast is the entire value proposition.
