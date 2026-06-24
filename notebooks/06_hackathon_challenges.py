@@ -3,10 +3,6 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # ///
-
-
-# COMMAND ----------
-
 # MAGIC %md
 # MAGIC # Block 6: Hackathon Challenges
 # MAGIC **Day 2**
