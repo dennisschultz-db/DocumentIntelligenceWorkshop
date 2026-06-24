@@ -12,17 +12,17 @@
 # MAGIC ---
 # MAGIC
 # MAGIC ## Agenda
-# MAGIC | Section | Duration |
-# MAGIC |---|---|
-# MAGIC | Guided: Connecting to SharePoint | 30 min |
-# MAGIC | Guided: Auto Loader for Incremental Processing | 30 min |
-# MAGIC | Hands-on Exercise | 15 min |
+# MAGIC | Section |
+# MAGIC |---|
+# MAGIC | Connecting to SharePoint |
+# MAGIC | Auto Loader for Incremental Processing |
+# MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC ## Guided Section: Connecting to SharePoint (30 min)
+# MAGIC ## Connecting to SharePoint
 
 # COMMAND ----------
 
@@ -153,7 +153,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC ## Guided Section: Auto Loader for Incremental Processing (30 min)
+# MAGIC ## Auto Loader for Incremental Processing
 
 # COMMAND ----------
 
@@ -169,7 +169,7 @@ df_meta.filter("_sharepoint_metadata.mime_type = 'application/pdf'").display()
 # MAGIC
 # MAGIC All of that is handled automatically by Auto Loader's checkpoint mechanism.
 # MAGIC
-# MAGIC ![Lakeflow Connect Architecture](./images/lakeflow_connect_unified.png)
+# MAGIC
 # MAGIC
 # MAGIC **How it works:**
 # MAGIC

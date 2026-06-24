@@ -5,16 +5,17 @@
 # ///
 # MAGIC %md
 # MAGIC # Block 3: Document Parsing with `ai_parse_document`
-# MAGIC **Day 1 | 11:00 - 11:55**
+# MAGIC **Day 1
 # MAGIC
 # MAGIC ---
 # MAGIC
 # MAGIC ## What You'll Learn
 # MAGIC
-# MAGIC | Topic | Time |
-# MAGIC |---|---|
-# MAGIC | Guided: `ai_parse_document` deep-dive | 25 min |
-# MAGIC | Hands-on: Parse and explore your own documents | 30 min |
+# MAGIC | Topic |
+# MAGIC |---|
+# MAGIC | `ai_parse_document` deep-dive |
+# MAGIC | Parsing PowerPoint |
+# MAGIC | Parsing documents with tables |
 # MAGIC
 # MAGIC ## Why This Matters
 # MAGIC
@@ -30,7 +31,6 @@
 # MAGIC SELECT ai_parse_document(content, MAP('version', '2.0')) FROM ...
 # MAGIC ```
 # MAGIC
-# MAGIC No infrastructure to deploy, no Step Functions to maintain, no custom container images to build.
 
 # COMMAND ----------
 
@@ -40,7 +40,7 @@
 
 # MAGIC %md
 # MAGIC ---
-# MAGIC # Guided Section: `ai_parse_document`
+# MAGIC # `ai_parse_document`
 # MAGIC ---
 
 # COMMAND ----------
@@ -72,8 +72,6 @@
 # MAGIC
 # MAGIC The function returns **structured VARIANT output** with element-level detail -- every paragraph, heading, table, and figure is individually identified with its type, content, confidence score, and bounding box coordinates.
 # MAGIC
-# MAGIC > **Presenter Note:** Emphasize the zero-infrastructure angle. They currently maintain container images,
-# MAGIC > ECS tasks, and Step Function state machines just to parse documents. All of that goes away.
 
 # COMMAND ----------
 
@@ -82,11 +80,6 @@
 # MAGIC
 # MAGIC Let's start with the simplest possible example -- reading a PDF file and parsing it in a single query.
 # MAGIC
-# MAGIC > **Presenter Note:** Walk through each part of the query:
-# MAGIC > - `read_files` with `binaryFile` format reads raw file bytes
-# MAGIC > - `pathGlobFilter` selects only PDFs
-# MAGIC > - `ai_parse_document` does all the heavy lifting
-# MAGIC > - The `MAP('version', '2.0')` parameter selects the latest parser version
 
 # COMMAND ----------
 
@@ -149,8 +142,6 @@ WHERE fileName = "sample_report_fy2026.pdf"
 # MAGIC | `page_footer` | Running footers |
 # MAGIC | `footnote` | Footnotes |
 # MAGIC
-# MAGIC > **Presenter Note:** Highlight that tables come back as HTML -- this is important because it preserves
-# MAGIC > row/column structure. They can parse the HTML downstream or feed it directly to an LLM for extraction.
 
 # COMMAND ----------
 
@@ -189,7 +180,7 @@ display(spark.sql("""
 # MAGIC The real power comes from flattening the `elements` array so each content block becomes its own row.
 # MAGIC We use `LATERAL VIEW explode()` to unnest the array.
 # MAGIC
-# MAGIC > **Presenter Note:** This is the key pattern they will use repeatedly:
+# MAGIC > **Key Pattern:** This is the key pattern you will use repeatedly:
 # MAGIC > 1. Parse the document into VARIANT
 # MAGIC > 2. Explode the elements array into rows
 # MAGIC > 3. Filter by element type
@@ -200,13 +191,13 @@ display(spark.sql("""
 # DBTITLE 1,Flatten text-type elements
 display(spark.sql("""
     WITH parsed AS (
-    SELECT 
-        fileName, 
-        ai_parse_document(
-            content, 
-            MAP('version', '2.0')) AS doc
-    FROM 01_bronze_raw_documents
-    WHERE fileName = "sample_report_fy2026.pdf"
+        SELECT 
+            fileName, 
+            ai_parse_document(
+                content, 
+                MAP('version', '2.0')) AS doc
+        FROM 01_bronze_raw_documents
+        WHERE fileName = "sample_report_fy2026.pdf"
     )
     SELECT
         fileName,
@@ -283,8 +274,6 @@ display(spark.sql(f"""
 # MAGIC In **Day 2**, we will send these slide images to multimodal LLMs for visual analysis -- extracting
 # MAGIC information from charts, diagrams, and layouts that text-only parsing would miss.
 # MAGIC
-# MAGIC > **Presenter Note:** Connect this forward to Day 2. The generated images are not just for storage --
-# MAGIC > they become inputs to vision models. This is the "multimodal pipeline" advantage.
 
 # COMMAND ----------
 
@@ -307,9 +296,7 @@ display(dbutils.fs.ls(f"/Volumes/{catalog}/{schema}/{personal_volume}/slide_imag
 # MAGIC Tables are returned as **HTML strings**, preserving their row and column structure. This makes them
 # MAGIC easy to parse downstream or feed directly to an LLM for structured extraction.
 # MAGIC
-# MAGIC > **Presenter Note:** Show that the HTML output is well-formed. You can render it in a notebook
-# MAGIC > with `displayHTML()`, parse it with BeautifulSoup, or pass it directly to an LLM and ask
-# MAGIC > "extract the data from this table as JSON."
+# MAGIC > **Note:** The HTML output is well-formed. You can render it in a notebook with `displayHTML()`, parse it with BeautifulSoup, or pass it directly to an LLM and ask "extract the data from this table as JSON."
 
 # COMMAND ----------
 
@@ -356,9 +343,6 @@ display(spark.sql("""
 # MAGIC - Built-in confidence scores for quality assessment
 # MAGIC - Automatic image rendering with `imageOutputPath`
 # MAGIC
-# MAGIC > **Presenter Note:** Acknowledge that some participants may have experience with these libraries.
-# MAGIC > The point is not that they are bad tools -- it is that `ai_parse_document` handles 90%+ of use cases
-# MAGIC > with a fraction of the code and no infrastructure overhead.
 
 # COMMAND ----------
 
